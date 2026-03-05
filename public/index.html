@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Richiee Live 🌍</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Richiee Live 🌍</h1>
+    <p id="status">Pick a country then press Start…</p>
+
+    <div class="topbar">
+      <div class="geo">
+        <span class="pill">
+          <img id="youFlag" class="flag" alt="You flag" />
+          <b id="youCountry">--</b>
+        </span>
+
+        <span class="pill">
+          <img id="strangerFlag" class="flag" alt="Stranger flag" />
+          <b id="strangerCountry">--</b>
+        </span>
+      </div>
+
+      <div class="filter">
+        <label for="countrySelect">Match:</label>
+        <select id="countrySelect">
+          <option value="ANY">Any country</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="videos">
+      <div class="card">
+        <h2>You</h2>
+        <video id="localVideo" autoplay playsinline muted></video>
+      </div>
+
+      <div class="card">
+        <h2>Stranger</h2>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </section>
+
+    <section class="chat card">
+      <h2>Chat</h2>
+      <div id="chatBox" class="chatBox"></div>
+
+      <form id="chatForm" class="chatForm">
+        <input id="chatInput" type="text" placeholder="Type a message…" autocomplete="off" />
+        <button id="sendBtn" type="submit">Send</button>
+      </form>
+    </section>
+  </main>
+
+  <footer class="controls">
+    <button id="startBtn">Start</button>
+    <button id="nextBtn" disabled>Next</button>
+    <button id="stopBtn" disabled>Stop</button>
+
+    <button id="camBtn" disabled>Camera Off</button>
+    <button id="micBtn" disabled>Mute</button>
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
