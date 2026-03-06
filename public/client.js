@@ -1,9 +1,3 @@
-/* Richiee Live - client.js
-   - New Partner label
-   - Support + Abuse + Contribute
-   - Admin mode (live + local)
-*/
-
 const socket = io();
 
 /* ---------- Elements ---------- */
@@ -25,40 +19,16 @@ const stopBtn = document.getElementById("stopBtn");
 const camBtn = document.getElementById("camBtn");
 const micBtn = document.getElementById("micBtn");
 
-const chatBox = document.getElementById("chatBox");
-const chatForm = document.getElementById("chatForm");
-const chatInput = document.getElementById("chatInput");
+const chatBtn = document.getElementById("chatBtn");
+const supportBtn = document.getElementById("supportBtn");
+const abuseBtn = document.getElementById("abuseBtn");
+const contributeBtn = document.getElementById("contributeBtn");
 
-/* Tabs */
-const tabBtns = document.querySelectorAll(".tabBtn");
-const tabPanels = document.querySelectorAll(".tabPanel");
-const adminTabBtn = document.querySelector(".tabBtn.adminOnly");
-
-/* Support */
-const supportForm = document.getElementById("supportForm");
-const supportCategory = document.getElementById("supportCategory");
-const supportMessage = document.getElementById("supportMessage");
-const supportStatus = document.getElementById("supportStatus");
-
-/* Abuse */
-const abuseForm = document.getElementById("abuseForm");
-const abuseReason = document.getElementById("abuseReason");
-const abuseDetails = document.getElementById("abuseDetails");
-const abuseStatus = document.getElementById("abuseStatus");
-
-/* Contribute */
-const mpesaTill = document.getElementById("mpesaTill");
-const copyTillBtn = document.getElementById("copyTillBtn");
-const usdLink = document.getElementById("usdLink");
-const openUsdBtn = document.getElementById("openUsdBtn");
-
-/* Admin */
-const adminTickets = document.getElementById("adminTickets");
-const adminReports = document.getElementById("adminReports");
-const clearTicketsBtn = document.getElementById("clearTicketsBtn");
-const clearReportsBtn = document.getElementById("clearReportsBtn");
-const maintenanceText = document.getElementById("maintenanceText");
-const publishMaintenanceBtn = document.getElementById("publishMaintenanceBtn");
+const modalBackdrop = document.getElementById("modalBackdrop");
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modalTitle");
+const modalBody = document.getElementById("modalBody");
+const modalClose = document.getElementById("modalClose");
 
 /* ---------- State ---------- */
 let localStream = null;
@@ -68,7 +38,6 @@ let myRole = null;
 let myCountryCode = "??";
 let partnerCountryCode = "??";
 
-/* live admin state from server */
 let liveTickets = [];
 let liveReports = [];
 
@@ -79,14 +48,6 @@ const RTC_CONFIG = {
 /* ---------- Helpers ---------- */
 function setStatus(msg) {
   statusEl.textContent = msg;
-}
-
-function addChatLine(from, text) {
-  const line = document.createElement("div");
-  line.className = "chatLine " + (from === "you" ? "me" : "them");
-  line.textContent = (from === "you" ? "You: " : "New Partner: ") + text;
-  chatBox.appendChild(line);
-  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 function countryFlagUrl(code) {
@@ -118,14 +79,13 @@ function setCountryUI() {
   }
 }
 
-function isAdminMode() {
-  const url = new URL(window.location.href);
-  return url.searchParams.get("admin") === "1" || localStorage.getItem("rl_admin") === "1";
-}
-
-function enableAdminUI() {
-  if (!adminTabBtn) return;
-  adminTabBtn.style.display = "inline-block";
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function saveLocalList(key, item) {
@@ -139,65 +99,22 @@ function loadLocalList(key) {
   return JSON.parse(localStorage.getItem(key) || "[]");
 }
 
-function escapeHtml(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+/* ---------- Modal ---------- */
+function openModal(title, html) {
+  modalTitle.textContent = title;
+  modalBody.innerHTML = html;
+  modalBackdrop.classList.remove("hidden");
+  modal.classList.remove("hidden");
 }
 
-function renderAdminLists() {
-  const localTickets = loadLocalList("rl_tickets");
-  const localReports = loadLocalList("rl_reports");
-
-  const mergedTickets = [...liveTickets];
-  for (const t of localTickets) {
-    if (!mergedTickets.some(x => x.time === t.time && x.message === t.message)) {
-      mergedTickets.push(t);
-    }
-  }
-
-  const mergedReports = [...liveReports];
-  for (const r of localReports) {
-    if (!mergedReports.some(x => x.time === r.time && x.details === r.details && x.reason === r.reason)) {
-      mergedReports.push(r);
-    }
-  }
-
-  adminTickets.innerHTML = mergedTickets.length
-    ? mergedTickets.map(t => `
-      <div class="adminItem">
-        <b>${escapeHtml(t.category || "General")}</b> • ${escapeHtml(t.time || "")}
-        ${t.fromCountry ? ` • ${escapeHtml(t.fromCountry)}` : ""}
-        <br/>${escapeHtml(t.message || "")}
-      </div>
-    `).join("")
-    : `<div class="muted">No tickets yet.</div>`;
-
-  adminReports.innerHTML = mergedReports.length
-    ? mergedReports.map(r => `
-      <div class="adminItem">
-        <b>${escapeHtml(r.reason || "Other")}</b> • ${escapeHtml(r.time || "")}
-        ${r.fromCountry ? ` • ${escapeHtml(r.fromCountry)}` : ""}
-        ${r.partnerCountry ? ` → ${escapeHtml(r.partnerCountry)}` : ""}
-        <br/>${escapeHtml(r.details || "")}
-      </div>
-    `).join("")
-    : `<div class="muted">No reports yet.</div>`;
+function closeModal() {
+  modalBackdrop.classList.add("hidden");
+  modal.classList.add("hidden");
+  modalBody.innerHTML = "";
 }
 
-/* ---------- Tabs ---------- */
-tabBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    tabBtns.forEach(b => b.classList.remove("active"));
-    tabPanels.forEach(p => p.classList.remove("active"));
-
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.tab).classList.add("active");
-  });
-});
+modalBackdrop.addEventListener("click", closeModal);
+modalClose.addEventListener("click", closeModal);
 
 /* ---------- Media ---------- */
 async function ensureMedia() {
@@ -220,7 +137,7 @@ async function ensureMedia() {
     return localStream;
   } catch (err) {
     console.error(err);
-    setStatus("Camera/mic blocked. Click the lock icon → allow Camera + Microphone → refresh.");
+    setStatus("Camera/mic blocked. Allow permission then refresh.");
     throw err;
   }
 }
@@ -303,7 +220,7 @@ function cleanupPeer() {
   }
 }
 
-/* ---------- Country detect + dropdown ---------- */
+/* ---------- Country ---------- */
 async function detectCountry() {
   try {
     const res = await fetch("https://ipapi.co/json/");
@@ -332,6 +249,8 @@ function populateCountries() {
 /* ---------- Buttons ---------- */
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
+  stopBtn.disabled = false;
+  nextBtn.disabled = true;
 
   try {
     await ensureMedia();
@@ -339,12 +258,15 @@ startBtn.addEventListener("click", async () => {
     setStatus("Finding a New Partner…");
   } catch {
     startBtn.disabled = false;
+    stopBtn.disabled = true;
   }
 });
 
 nextBtn.addEventListener("click", () => {
   cleanupPeer();
   socket.emit("next");
+  nextBtn.disabled = true;
+  stopBtn.disabled = false;
   setStatus("Finding a New Partner…");
 });
 
@@ -369,100 +291,111 @@ micBtn.addEventListener("click", () => {
   setMicEnabled(!on);
 });
 
-/* ---------- Chat ---------- */
-chatForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const text = (chatInput.value || "").trim();
-  if (!text) return;
+/* ---------- Popups ---------- */
+chatBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("chatTemplate").innerHTML;
+  openModal("Chat", tpl);
 
-  socket.emit("chat", { text });
-  chatInput.value = "";
+  const chatBoxPopup = document.getElementById("chatBoxPopup");
+  const chatFormPopup = document.getElementById("chatFormPopup");
+  const chatInputPopup = document.getElementById("chatInputPopup");
+
+  chatBoxPopup.innerHTML = chatBox.innerHTML;
+
+  chatFormPopup.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = (chatInputPopup.value || "").trim();
+    if (!text) return;
+    socket.emit("chat", { text });
+    chatInputPopup.value = "";
+  });
 });
 
-/* ---------- Support + Abuse + Contribute ---------- */
-supportForm.addEventListener("submit", (e) => {
-  e.preventDefault();
+supportBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("supportTemplate").innerHTML;
+  openModal("Support", tpl);
 
-  const ticket = {
-    time: new Date().toLocaleString(),
-    category: supportCategory.value,
-    message: (supportMessage.value || "").trim(),
-    fromCountry: myCountryCode
-  };
+  const form = document.getElementById("supportFormPopup");
+  const category = document.getElementById("supportCategoryPopup");
+  const message = document.getElementById("supportMessagePopup");
+  const status = document.getElementById("supportStatusPopup");
 
-  if (!ticket.message) {
-    supportStatus.textContent = "Type a message first.";
-    return;
-  }
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
 
-  saveLocalList("rl_tickets", ticket);
-  renderAdminLists();
+    const ticket = {
+      time: new Date().toLocaleString(),
+      category: category.value,
+      message: (message.value || "").trim(),
+      fromCountry: myCountryCode
+    };
 
-  socket.emit("support-ticket", ticket);
+    if (!ticket.message) {
+      status.textContent = "Type a message first.";
+      return;
+    }
 
-  supportMessage.value = "";
-  supportStatus.textContent = "Sent ✅ (Support will review)";
+    saveLocalList("rl_tickets", ticket);
+    socket.emit("support-ticket", ticket);
+    message.value = "";
+    status.textContent = "Sent ✅";
+  });
 });
 
-abuseForm.addEventListener("submit", (e) => {
-  e.preventDefault();
+abuseBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("abuseTemplate").innerHTML;
+  openModal("Report issue", tpl);
 
-  const report = {
-    time: new Date().toLocaleString(),
-    reason: abuseReason.value,
-    details: (abuseDetails.value || "").trim(),
-    fromCountry: myCountryCode,
-    partnerCountry: partnerCountryCode
-  };
+  const form = document.getElementById("abuseFormPopup");
+  const reason = document.getElementById("abuseReasonPopup");
+  const details = document.getElementById("abuseDetailsPopup");
+  const status = document.getElementById("abuseStatusPopup");
 
-  saveLocalList("rl_reports", report);
-  renderAdminLists();
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
 
-  socket.emit("abuse-report", report);
+    const report = {
+      time: new Date().toLocaleString(),
+      reason: reason.value,
+      details: (details.value || "").trim(),
+      fromCountry: myCountryCode,
+      partnerCountry: partnerCountryCode
+    };
 
-  abuseDetails.value = "";
-  abuseStatus.textContent = "Report submitted ✅";
+    saveLocalList("rl_reports", report);
+    socket.emit("abuse-report", report);
+    details.value = "";
+    status.textContent = "Report submitted ✅";
+  });
 });
 
-copyTillBtn.addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(mpesaTill.textContent.trim());
-    copyTillBtn.textContent = "Copied ✅";
-    setTimeout(() => (copyTillBtn.textContent = "Copy Till"), 1200);
-  } catch {
-    alert("Copy failed. Till: " + mpesaTill.textContent.trim());
-  }
+contributeBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("contributeTemplate").innerHTML;
+  openModal("Contribute", tpl);
+
+  const till = document.getElementById("mpesaTillPopup");
+  const copyBtn = document.getElementById("copyTillBtnPopup");
+  const usd = document.getElementById("usdLinkPopup");
+  const openBtn = document.getElementById("openUsdBtnPopup");
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(till.textContent.trim());
+      copyBtn.textContent = "Copied ✅";
+      setTimeout(() => (copyBtn.textContent = "Copy Till"), 1200);
+    } catch {
+      alert("Copy failed. Till: " + till.textContent.trim());
+    }
+  });
+
+  openBtn.addEventListener("click", () => {
+    const link = (usd.value || "").trim();
+    if (!link) return alert("Paste your USD link first.");
+    window.open(link, "_blank", "noopener,noreferrer");
+  });
 });
 
-openUsdBtn.addEventListener("click", () => {
-  const link = (usdLink.value || "").trim();
-  if (!link) return alert("Paste your USD link first (PayPal/Stripe/etc).");
-  window.open(link, "_blank", "noopener,noreferrer");
-});
-
-/* ---------- Admin ---------- */
-clearTicketsBtn?.addEventListener("click", () => {
-  localStorage.removeItem("rl_tickets");
-  liveTickets = [];
-  renderAdminLists();
-});
-
-clearReportsBtn?.addEventListener("click", () => {
-  localStorage.removeItem("rl_reports");
-  liveReports = [];
-  renderAdminLists();
-});
-
-publishMaintenanceBtn?.addEventListener("click", () => {
-  const msg = (maintenanceText.value || "").trim();
-  if (!msg) return alert("Type a maintenance notice first.");
-
-  localStorage.setItem("rl_maintenance", msg);
-  socket.emit("maintenance", { message: msg });
-  setStatus("Maintenance published ✅");
-});
-
-/* ---------- Socket events ---------- */
+/* ---------- Socket ---------- */
 socket.on("status", ({ message }) => {
   setStatus(message || "");
 });
@@ -474,21 +407,16 @@ socket.on("you-geo", ({ you }) => {
 
 socket.on("geo", ({ you, stranger, partner }) => {
   myCountryCode = (you || "??").toUpperCase();
-
-  // supports either "stranger" or "partner" from server
   const other = partner || stranger || "--";
   partnerCountryCode = (other || "--").toUpperCase();
-
   setCountryUI();
 });
 
 socket.on("matched", async ({ role }) => {
   matched = true;
   myRole = role;
-
   nextBtn.disabled = false;
   stopBtn.disabled = false;
-
   setStatus("Matched ✅ Starting call…");
 
   if (myRole === "caller") {
@@ -517,17 +445,18 @@ socket.on("stopped", () => {
 });
 
 socket.on("chat", ({ from, text }) => {
-  if (from === "you") {
-    addChatLine("you", text);
-    return;
-  }
+  const box = modalBody.querySelector("#chatBoxPopup");
+  const line = document.createElement("div");
+  line.className = "chatLine " + (from === "you" ? "me" : "them");
+  line.textContent = (from === "you" ? "You: " : "New Partner: ") + text;
 
-  if (from === "partner" || from === "stranger") {
-    addChatLine("partner", text);
-    return;
-  }
+  chatBox.appendChild(line);
+  chatBox.scrollTop = chatBox.scrollHeight;
 
-  addChatLine("partner", text);
+  if (box) {
+    box.appendChild(line.cloneNode(true));
+    box.scrollTop = box.scrollHeight;
+  }
 });
 
 socket.on("signal", async ({ type, data }) => {
@@ -542,19 +471,7 @@ socket.on("signal", async ({ type, data }) => {
 
 socket.on("maintenance", ({ message }) => {
   if (!message) return;
-  maintenanceText.value = message;
   setStatus("Maintenance: " + message);
-});
-
-/* ---------- Live Admin Updates ---------- */
-socket.on("admin-support-update", (tickets) => {
-  liveTickets = Array.isArray(tickets) ? tickets : [];
-  renderAdminLists();
-});
-
-socket.on("admin-report-update", (reports) => {
-  liveReports = Array.isArray(reports) ? reports : [];
-  renderAdminLists();
 });
 
 /* ---------- Boot ---------- */
@@ -563,15 +480,6 @@ socket.on("admin-report-update", (reports) => {
   populateCountries();
   detectCountry();
 
-  if (isAdminMode()) {
-    enableAdminUI();
-    renderAdminLists();
-    socket.emit("request-admin-data");
-    setStatus("Admin mode enabled ✅");
-  }
-
-  const savedMaint = localStorage.getItem("rl_maintenance");
-  if (savedMaint && !maintenanceText.value) {
-    maintenanceText.value = savedMaint;
-  }
+  nextBtn.disabled = true;
+  stopBtn.disabled = true;
 })();
