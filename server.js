@@ -1,14 +1,41 @@
 const express = require("express");
 const http = require("http");
+const path = require("path");
 const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+app.use(express.json());
 app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
+
+/* ---------------- ADMIN LOGIN ---------------- */
+
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "richiee_goat";
+
+function requireAdminAuth(req, res, next) {
+  const auth = req.headers.authorization;
+
+  if (!auth || !auth.startsWith("Basic ")) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="Richiee Admin"');
+    return res.status(401).send("Authentication required.");
+  }
+
+  const base64 = auth.split(" ")[1];
+  const decoded = Buffer.from(base64, "base64").toString("utf8");
+  const [username, password] = decoded.split(":");
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    return next();
+  }
+
+  res.setHeader("WWW-Authenticate", 'Basic realm="Richiee Admin"');
+  return res.status(401).send("Invalid credentials.");
+}
 
 /* ---------------- USERS ---------------- */
 
@@ -38,6 +65,17 @@ function broadcastOnlineCount() {
   io.emit("online-count", { count });
 }
 
+function getWaitingCount() {
+  return waitingUsers.length;
+}
+
+function getConnectedCountriesCount() {
+  const set = new Set(
+    Object.values(countries).filter((c) => c && c !== "??" && c !== "--")
+  );
+  return set.size;
+}
+
 function canMatch(socketIdA, socketIdB) {
   const prefA = matchPreferences[socketIdA] || "ANY";
   const prefB = matchPreferences[socketIdB] || "ANY";
@@ -50,6 +88,45 @@ function canMatch(socketIdA, socketIdB) {
 
   return aAcceptsB && bAcceptsA;
 }
+
+/* ---------------- ADMIN ROUTES ---------------- */
+
+app.get("/admin", requireAdminAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+app.get("/api/admin/summary", requireAdminAuth, (req, res) => {
+  res.json({
+    onlineUsers: io.of("/").sockets.size,
+    waitingUsers: getWaitingCount(),
+    countriesConnected: getConnectedCountriesCount(),
+    maintenanceNotice,
+    tickets: supportTickets,
+    reports: abuseReports
+  });
+});
+
+app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
+  const message = String(req.body?.message || "").slice(0, 1000);
+  maintenanceNotice = message;
+
+  io.emit("maintenance", { message: maintenanceNotice });
+
+  res.json({
+    ok: true,
+    maintenanceNotice
+  });
+});
+
+app.post("/api/admin/clear-tickets", requireAdminAuth, (req, res) => {
+  supportTickets = [];
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/clear-reports", requireAdminAuth, (req, res) => {
+  abuseReports = [];
+  res.json({ ok: true });
+});
 
 /* ---------------- MATCH USERS ---------------- */
 
@@ -64,7 +141,7 @@ function matchUsers(socket) {
       message:
         pref === "ANY"
           ? "Waiting for new partner..."
-          : `Waiting for new partner from ${pref}...`,
+          : `Waiting for new partner from ${pref}...`
     });
 
     return;
@@ -94,7 +171,7 @@ function matchUsers(socket) {
       message:
         pref === "ANY"
           ? "Waiting for new partner..."
-          : `Waiting for new partner from ${pref}...`,
+          : `Waiting for new partner from ${pref}...`
     });
 
     return;
@@ -111,12 +188,12 @@ function matchUsers(socket) {
 
   socket.emit("geo", {
     you: countryA,
-    stranger: countryB,
+    stranger: countryB
   });
 
   safeEmit(partnerId, "geo", {
     you: countryB,
-    stranger: countryA,
+    stranger: countryA
   });
 
   if (maintenanceNotice) {
@@ -134,7 +211,7 @@ io.on("connection", (socket) => {
   broadcastOnlineCount();
 
   socket.emit("status", {
-    message: "Connected. Press Start.",
+    message: "Connected. Press Start."
   });
 
   socket.emit("online-count", { count: io.of("/").sockets.size });
@@ -143,7 +220,7 @@ io.on("connection", (socket) => {
     countries[socket.id] = country || "??";
 
     socket.emit("you-geo", {
-      you: countries[socket.id],
+      you: countries[socket.id]
     });
   });
 
@@ -158,7 +235,7 @@ io.on("connection", (socket) => {
         message:
           matchPreferences[socket.id] === "ANY"
             ? "Waiting for new partner..."
-            : `Waiting for new partner from ${matchPreferences[socket.id]}...`,
+            : `Waiting for new partner from ${matchPreferences[socket.id]}...`
       });
     }
   });
@@ -207,12 +284,12 @@ io.on("connection", (socket) => {
 
     safeEmit(partner, "chat", {
       from: "partner",
-      text,
+      text
     });
 
     socket.emit("chat", {
       from: "you",
-      text,
+      text
     });
   });
 
@@ -222,11 +299,10 @@ io.on("connection", (socket) => {
       time: ticket?.time || new Date().toLocaleString(),
       category: ticket?.category || "General",
       message: String(ticket?.message || "").slice(0, 1000),
-      fromCountry: ticket?.fromCountry || "??",
+      fromCountry: ticket?.fromCountry || "??"
     };
 
     supportTickets.unshift(cleanTicket);
-    io.emit("admin-support-update", supportTickets);
     console.log("Support ticket received:", cleanTicket);
   });
 
@@ -237,11 +313,10 @@ io.on("connection", (socket) => {
       reason: report?.reason || "Other",
       details: String(report?.details || "").slice(0, 1000),
       fromCountry: report?.fromCountry || "??",
-      partnerCountry: report?.partnerCountry || "??",
+      partnerCountry: report?.partnerCountry || "??"
     };
 
     abuseReports.unshift(cleanReport);
-    io.emit("admin-report-update", abuseReports);
     console.log("Abuse report received:", cleanReport);
   });
 
@@ -249,16 +324,10 @@ io.on("connection", (socket) => {
     maintenanceNotice = String(message || "").slice(0, 1000);
 
     io.emit("maintenance", {
-      message: maintenanceNotice,
+      message: maintenanceNotice
     });
 
     console.log("Maintenance updated:", maintenanceNotice);
-  });
-
-  socket.on("request-admin-data", () => {
-    socket.emit("admin-support-update", supportTickets);
-    socket.emit("admin-report-update", abuseReports);
-    socket.emit("maintenance", { message: maintenanceNotice });
   });
 
   socket.on("disconnect", () => {

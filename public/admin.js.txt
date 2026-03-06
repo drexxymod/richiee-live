@@ -1,0 +1,112 @@
+const onlineUsersEl = document.getElementById("onlineUsers");
+const waitingUsersEl = document.getElementById("waitingUsers");
+const countriesConnectedEl = document.getElementById("countriesConnected");
+
+const maintenanceMessageEl = document.getElementById("maintenanceMessage");
+const maintenanceStatusEl = document.getElementById("maintenanceStatus");
+
+const ticketsListEl = document.getElementById("ticketsList");
+const reportsListEl = document.getElementById("reportsList");
+
+const sendMaintenanceBtn = document.getElementById("sendMaintenance");
+const refreshBtn = document.getElementById("refreshBtn");
+const clearTicketsBtn = document.getElementById("clearTickets");
+const clearReportsBtn = document.getElementById("clearReports");
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderList(container, items, emptyText, type) {
+  if (!items || items.length === 0) {
+    container.innerHTML = `<p class="muted">${emptyText}</p>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .map((item) => {
+      if (type === "ticket") {
+        return `
+          <div class="item">
+            <strong>${escapeHtml(item.category)}</strong>
+            <div class="meta">${escapeHtml(item.time)} • ${escapeHtml(item.fromCountry)}</div>
+            <div>${escapeHtml(item.message)}</div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="item">
+          <strong>${escapeHtml(item.reason)}</strong>
+          <div class="meta">${escapeHtml(item.time)} • ${escapeHtml(item.fromCountry)} → ${escapeHtml(item.partnerCountry)}</div>
+          <div>${escapeHtml(item.details || "No extra details")}</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function loadAdminData() {
+  const res = await fetch("/api/admin/summary");
+  const data = await res.json();
+
+  onlineUsersEl.textContent = data.onlineUsers ?? 0;
+  waitingUsersEl.textContent = data.waitingUsers ?? 0;
+  countriesConnectedEl.textContent = data.countriesConnected ?? 0;
+
+  maintenanceMessageEl.value = data.maintenanceNotice || "";
+
+  renderList(ticketsListEl, data.tickets, "No support tickets yet.", "ticket");
+  renderList(reportsListEl, data.reports, "No abuse reports yet.", "report");
+}
+
+sendMaintenanceBtn.addEventListener("click", async () => {
+  const message = maintenanceMessageEl.value.trim();
+
+  const res = await fetch("/api/admin/maintenance", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ message })
+  });
+
+  if (res.ok) {
+    maintenanceStatusEl.textContent = "Maintenance message sent.";
+  } else {
+    maintenanceStatusEl.textContent = "Failed to send message.";
+  }
+});
+
+refreshBtn.addEventListener("click", async () => {
+  maintenanceStatusEl.textContent = "";
+  await loadAdminData();
+});
+
+clearTicketsBtn.addEventListener("click", async () => {
+  const res = await fetch("/api/admin/clear-tickets", {
+    method: "POST"
+  });
+
+  if (res.ok) {
+    await loadAdminData();
+  }
+});
+
+clearReportsBtn.addEventListener("click", async () => {
+  const res = await fetch("/api/admin/clear-reports", {
+    method: "POST"
+  });
+
+  if (res.ok) {
+    await loadAdminData();
+  }
+});
+
+loadAdminData();
+setInterval(loadAdminData, 5000);
