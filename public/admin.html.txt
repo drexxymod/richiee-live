@@ -1,60 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Richiee Live Admin</title>
-  <link rel="stylesheet" href="admin.css" />
+<title>Richiee Admin</title>
+<link rel="stylesheet" href="admin.css">
 </head>
+
 <body>
-  <div class="wrap">
-    <header class="hero">
-      <h1>Richiee Live Admin</h1>
-      <p>Private control panel</p>
-    </header>
 
-    <section class="statsGrid">
-      <div class="statCard">
-        <span class="label">Online Users</span>
-        <strong id="onlineUsers">0</strong>
-      </div>
-      <div class="statCard">
-        <span class="label">Waiting Users</span>
-        <strong id="waitingUsers">0</strong>
-      </div>
-      <div class="statCard">
-        <span class="label">Countries Connected</span>
-        <strong id="countriesConnected">0</strong>
-      </div>
-    </section>
+<h1>Richiee Live Admin Panel</h1>
 
-    <section class="panel">
-      <h2>Maintenance Broadcast</h2>
-      <textarea id="maintenanceMessage" placeholder="Type maintenance message..."></textarea>
-      <div class="row">
-        <button id="sendMaintenance">Send message</button>
-        <button id="refreshBtn" class="ghost">Refresh</button>
-      </div>
-      <p id="maintenanceStatus" class="muted"></p>
-    </section>
+<div id="stats">
+<p>Online Users: <span id="online"></span></p>
+<p>Waiting Users: <span id="waiting"></span></p>
+<p>Countries Connected: <span id="countries"></span></p>
+</div>
 
-    <section class="panel">
-      <div class="panelTop">
-        <h2>Support Tickets</h2>
-        <button id="clearTickets" class="danger">Clear tickets</button>
-      </div>
-      <div id="ticketsList" class="listBox"></div>
-    </section>
+<h2>Maintenance Message</h2>
 
-    <section class="panel">
-      <div class="panelTop">
-        <h2>Abuse Reports</h2>
-        <button id="clearReports" class="danger">Clear reports</button>
-      </div>
-      <div id="reportsList" class="listBox"></div>
-    </section>
-  </div>
+<textarea id="message"></textarea>
+<br>
+<button onclick="sendMaintenance()">Send Maintenance Message</button>
 
-  <script src="admin.js"></script>
+<h2>Support Tickets</h2>
+<div id="tickets"></div>
+
+<h2>Abuse Reports</h2>
+<div id="reports"></div>
+
+<script src="admin.js"></script>
+
 </body>
 </html>
