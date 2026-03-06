@@ -70,10 +70,12 @@ function getWaitingCount() {
 }
 
 function getConnectedCountriesCount() {
-  const set = new Set(
-    Object.values(countries).filter((c) => c && c !== "??" && c !== "--")
+  const uniqueCountries = new Set(
+    Object.values(countries).filter(
+      (country) => country && country !== "??" && country !== "--"
+    )
   );
-  return set.size;
+  return uniqueCountries.size;
 }
 
 function canMatch(socketIdA, socketIdB) {
@@ -214,7 +216,9 @@ io.on("connection", (socket) => {
     message: "Connected. Press Start."
   });
 
-  socket.emit("online-count", { count: io.of("/").sockets.size });
+  socket.emit("online-count", {
+    count: io.of("/").sockets.size
+  });
 
   socket.on("client-geo", ({ country }) => {
     countries[socket.id] = country || "??";
