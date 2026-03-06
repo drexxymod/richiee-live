@@ -6,6 +6,7 @@
   <title>Richiee Live 🌍</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <header>
     <h1>Richiee Live 🌍</h1>
@@ -19,8 +20,8 @@
         </span>
 
         <span class="pill">
-          <img id="strangerFlag" class="flag" alt="Stranger flag" />
-          <b id="strangerCountry">--</b>
+          <img id="partnerFlag" class="flag" alt="New Partner flag" />
+          <b id="partnerCountry">--</b>
         </span>
       </div>
 
@@ -41,19 +42,148 @@
       </div>
 
       <div class="card">
-        <h2>Stranger</h2>
+        <h2>New Partner</h2>
         <video id="remoteVideo" autoplay playsinline></video>
       </div>
     </section>
 
-    <section class="chat card">
-      <h2>Chat</h2>
-      <div id="chatBox" class="chatBox"></div>
+    <section class="rightColumn">
+      <!-- Tabs -->
+      <div class="card tabs">
+        <div class="tabRow">
+          <button class="tabBtn active" data-tab="tabChat">Chat</button>
+          <button class="tabBtn" data-tab="tabSupport">Support</button>
+          <button class="tabBtn" data-tab="tabAbuse">Report abuse</button>
+          <button class="tabBtn" data-tab="tabContribute">Contribute</button>
+          <button class="tabBtn adminOnly" data-tab="tabAdmin" style="display:none;">Admin</button>
+        </div>
 
-      <form id="chatForm" class="chatForm">
-        <input id="chatInput" type="text" placeholder="Type a message…" autocomplete="off" />
-        <button id="sendBtn" type="submit">Send</button>
-      </form>
+        <!-- CHAT -->
+        <div id="tabChat" class="tabPanel active">
+          <h2>Chat</h2>
+          <div id="chatBox" class="chatBox"></div>
+
+          <form id="chatForm" class="chatForm">
+            <input id="chatInput" type="text" placeholder="Type a message…" autocomplete="off" />
+            <button id="sendBtn" type="submit">Send</button>
+          </form>
+        </div>
+
+        <!-- SUPPORT -->
+        <div id="tabSupport" class="tabPanel">
+          <h2>Support</h2>
+          <p class="muted">
+            Send an issue or suggestion to Richiee Support. (You can review these in Admin mode.)
+          </p>
+
+          <form id="supportForm" class="form">
+            <label>
+              Category
+              <select id="supportCategory">
+                <option value="Suggestion">Suggestion</option>
+                <option value="Bug">Bug / Not working</option>
+                <option value="Account">Account / Access</option>
+                <option value="Payment">Payment / Contribution</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+
+            <label>
+              Message
+              <textarea id="supportMessage" rows="4" placeholder="Explain the issue or suggestion…"></textarea>
+            </label>
+
+            <button type="submit">Send to Support</button>
+            <p id="supportStatus" class="muted"></p>
+          </form>
+        </div>
+
+        <!-- REPORT ABUSE -->
+        <div id="tabAbuse" class="tabPanel">
+          <h2>Report abuse</h2>
+          <p class="muted">
+            Report a New Partner for harassment, scams, nudity, threats, or other abuse.
+          </p>
+
+          <form id="abuseForm" class="form">
+            <label>
+              Reason
+              <select id="abuseReason">
+                <option value="Harassment">Harassment</option>
+                <option value="Scam">Scam / Fraud</option>
+                <option value="Sexual content">Sexual content</option>
+                <option value="Hate / Violence">Hate / Violence</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+
+            <label>
+              Details (optional)
+              <textarea id="abuseDetails" rows="4" placeholder="Add details that help moderation…"></textarea>
+            </label>
+
+            <button type="submit">Submit report</button>
+            <p id="abuseStatus" class="muted"></p>
+          </form>
+        </div>
+
+        <!-- CONTRIBUTE -->
+        <div id="tabContribute" class="tabPanel">
+          <h2>Contribute</h2>
+          <p class="muted">
+            Support Richiee Live development. Choose KES or USD.
+          </p>
+
+          <div class="contribBox">
+            <div class="contribCard">
+              <h3>KES (M-Pesa)</h3>
+              <p><b>Till:</b> <span id="mpesaTill">3062600</span></p>
+              <p class="muted">Use your name as reference if possible.</p>
+              <button id="copyTillBtn" type="button">Copy Till</button>
+            </div>
+
+            <div class="contribCard">
+              <h3>USD (Card/PayPal)</h3>
+              <p class="muted">Add your link here later (PayPal.me / Stripe / etc.)</p>
+              <input id="usdLink" type="text" placeholder="https://..." />
+              <button id="openUsdBtn" type="button">Open USD link</button>
+            </div>
+          </div>
+
+          <p class="muted">
+            Tip: You can also show a public “Support” page by adding links here.
+          </p>
+        </div>
+
+        <!-- ADMIN -->
+        <div id="tabAdmin" class="tabPanel">
+          <h2>Admin / Tech Support</h2>
+          <p class="muted">
+            Only you should access this. This shows tickets + abuse reports coming in.
+          </p>
+
+          <div class="adminGrid">
+            <div class="adminCard">
+              <h3>Support Tickets</h3>
+              <div id="adminTickets" class="adminList"></div>
+              <button id="clearTicketsBtn" type="button">Clear tickets (local)</button>
+            </div>
+
+            <div class="adminCard">
+              <h3>Abuse Reports</h3>
+              <div id="adminReports" class="adminList"></div>
+              <button id="clearReportsBtn" type="button">Clear reports (local)</button>
+            </div>
+
+            <div class="adminCard">
+              <h3>Maintenance Notice</h3>
+              <textarea id="maintenanceText" rows="4" placeholder="Type maintenance notice…"></textarea>
+              <button id="publishMaintenanceBtn" type="button">Publish notice</button>
+              <p class="muted">This will show to users as a banner (local + socket broadcast if enabled).</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
