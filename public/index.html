@@ -10,6 +10,7 @@
   <header>
     <h1>Richiee Live 🌍</h1>
     <p id="status">Connected. Press Start.</p>
+    <p id="onlineCount" class="onlineCount">🔥 0 people online</p>
 
     <div class="topbar">
       <div class="geo">
@@ -62,7 +63,6 @@
     <button id="micBtn" disabled>Mute</button>
   </footer>
 
-  <!-- Floating modal -->
   <div id="modalBackdrop" class="modalBackdrop hidden"></div>
 
   <div id="modal" class="modal hidden">
@@ -73,7 +73,6 @@
     <div id="modalBody" class="modalBody"></div>
   </div>
 
-  <!-- Hidden templates -->
   <template id="chatTemplate">
     <section class="popupSection">
       <h2>Chat</h2>
@@ -162,6 +161,8 @@
     </section>
   </template>
 
- <script src="/socket.io/socket.io.js"></script>
-<script src="countries.js"></script>
-<script src="client.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="countries.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
