@@ -1,7 +1,7 @@
 /* Richiee Live - client.js
    - New Partner label
    - Support + Abuse + Contribute
-   - Admin mode (local + socket if server supports)
+   - Admin mode (live + local)
 */
 
 const socket = io();
@@ -64,9 +64,13 @@ const publishMaintenanceBtn = document.getElementById("publishMaintenanceBtn");
 let localStream = null;
 let pc = null;
 let matched = false;
-let myRole = null; // caller/callee
+let myRole = null;
 let myCountryCode = "??";
 let partnerCountryCode = "??";
+
+/* live admin state from server */
+let liveTickets = [];
+let liveReports = [];
 
 const RTC_CONFIG = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -86,7 +90,7 @@ function addChatLine(from, text) {
 }
 
 function countryFlagUrl(code) {
-  if (!code || code === "??") return "";
+  if (!code || code === "??" || code === "--") return "";
   return `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
 }
 
@@ -94,13 +98,27 @@ function setCountryUI() {
   youCountryEl.textContent = myCountryCode || "??";
   partnerCountryEl.textContent = partnerCountryCode || "--";
 
-  youFlag.src = countryFlagUrl(myCountryCode);
-  partnerFlag.src = countryFlagUrl(partnerCountryCode);
+  const yourFlagUrl = countryFlagUrl(myCountryCode);
+  const partnerFlagUrl = countryFlagUrl(partnerCountryCode);
+
+  if (yourFlagUrl) {
+    youFlag.src = yourFlagUrl;
+    youFlag.style.display = "inline-block";
+  } else {
+    youFlag.removeAttribute("src");
+    youFlag.style.display = "none";
+  }
+
+  if (partnerFlagUrl) {
+    partnerFlag.src = partnerFlagUrl;
+    partnerFlag.style.display = "inline-block";
+  } else {
+    partnerFlag.removeAttribute("src");
+    partnerFlag.style.display = "none";
+  }
 }
 
 function isAdminMode() {
-  // Admin mode on your device only:
-  // - add ?admin=1 in URL OR set localStorage admin=1
   const url = new URL(window.location.href);
   return url.searchParams.get("admin") === "1" || localStorage.getItem("rl_admin") === "1";
 }
@@ -121,19 +139,6 @@ function loadLocalList(key) {
   return JSON.parse(localStorage.getItem(key) || "[]");
 }
 
-function renderAdminLists() {
-  const tickets = loadLocalList("rl_tickets");
-  const reports = loadLocalList("rl_reports");
-
-  adminTickets.innerHTML = tickets.length
-    ? tickets.map(t => `<div class="adminItem"><b>${escapeHtml(t.category)}</b> • ${escapeHtml(t.time)}<br/>${escapeHtml(t.message)}</div>`).join("")
-    : `<div class="muted">No tickets yet.</div>`;
-
-  adminReports.innerHTML = reports.length
-    ? reports.map(r => `<div class="adminItem"><b>${escapeHtml(r.reason)}</b> • ${escapeHtml(r.time)}<br/>${escapeHtml(r.details || "")}</div>`).join("")
-    : `<div class="muted">No reports yet.</div>`;
-}
-
 function escapeHtml(s) {
   return String(s || "")
     .replaceAll("&", "&amp;")
@@ -141,6 +146,46 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function renderAdminLists() {
+  const localTickets = loadLocalList("rl_tickets");
+  const localReports = loadLocalList("rl_reports");
+
+  const mergedTickets = [...liveTickets];
+  for (const t of localTickets) {
+    if (!mergedTickets.some(x => x.time === t.time && x.message === t.message)) {
+      mergedTickets.push(t);
+    }
+  }
+
+  const mergedReports = [...liveReports];
+  for (const r of localReports) {
+    if (!mergedReports.some(x => x.time === r.time && x.details === r.details && x.reason === r.reason)) {
+      mergedReports.push(r);
+    }
+  }
+
+  adminTickets.innerHTML = mergedTickets.length
+    ? mergedTickets.map(t => `
+      <div class="adminItem">
+        <b>${escapeHtml(t.category || "General")}</b> • ${escapeHtml(t.time || "")}
+        ${t.fromCountry ? ` • ${escapeHtml(t.fromCountry)}` : ""}
+        <br/>${escapeHtml(t.message || "")}
+      </div>
+    `).join("")
+    : `<div class="muted">No tickets yet.</div>`;
+
+  adminReports.innerHTML = mergedReports.length
+    ? mergedReports.map(r => `
+      <div class="adminItem">
+        <b>${escapeHtml(r.reason || "Other")}</b> • ${escapeHtml(r.time || "")}
+        ${r.fromCountry ? ` • ${escapeHtml(r.fromCountry)}` : ""}
+        ${r.partnerCountry ? ` → ${escapeHtml(r.partnerCountry)}` : ""}
+        <br/>${escapeHtml(r.details || "")}
+      </div>
+    `).join("")
+    : `<div class="muted">No reports yet.</div>`;
 }
 
 /* ---------- Tabs ---------- */
@@ -159,7 +204,6 @@ async function ensureMedia() {
   if (localStream) return localStream;
 
   try {
-    // IMPORTANT: camera/mic require HTTPS (your custom domain + SSL fixes this)
     localStream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true
@@ -170,7 +214,6 @@ async function ensureMedia() {
     camBtn.disabled = false;
     micBtn.disabled = false;
 
-    // Set default states
     setCamEnabled(true);
     setMicEnabled(true);
 
@@ -262,7 +305,6 @@ function cleanupPeer() {
 
 /* ---------- Country detect + dropdown ---------- */
 async function detectCountry() {
-  // Best effort geo detect
   try {
     const res = await fetch("https://ipapi.co/json/");
     const data = await res.json();
@@ -277,8 +319,6 @@ async function detectCountry() {
 }
 
 function populateCountries() {
-  // If you have public/countries.js providing window.COUNTRIES, use it.
-  // Otherwise we just keep "Any country" plus your detected country.
   if (window.COUNTRIES && Array.isArray(window.COUNTRIES)) {
     for (const c of window.COUNTRIES) {
       const opt = document.createElement("option");
@@ -342,6 +382,7 @@ chatForm.addEventListener("submit", (e) => {
 /* ---------- Support + Abuse + Contribute ---------- */
 supportForm.addEventListener("submit", (e) => {
   e.preventDefault();
+
   const ticket = {
     time: new Date().toLocaleString(),
     category: supportCategory.value,
@@ -357,7 +398,6 @@ supportForm.addEventListener("submit", (e) => {
   saveLocalList("rl_tickets", ticket);
   renderAdminLists();
 
-  // If server supports it, this will deliver tickets to your admin browser live:
   socket.emit("support-ticket", ticket);
 
   supportMessage.value = "";
@@ -366,6 +406,7 @@ supportForm.addEventListener("submit", (e) => {
 
 abuseForm.addEventListener("submit", (e) => {
   e.preventDefault();
+
   const report = {
     time: new Date().toLocaleString(),
     reason: abuseReason.value,
@@ -389,7 +430,6 @@ copyTillBtn.addEventListener("click", async () => {
     copyTillBtn.textContent = "Copied ✅";
     setTimeout(() => (copyTillBtn.textContent = "Copy Till"), 1200);
   } catch {
-    // fallback
     alert("Copy failed. Till: " + mpesaTill.textContent.trim());
   }
 });
@@ -403,20 +443,23 @@ openUsdBtn.addEventListener("click", () => {
 /* ---------- Admin ---------- */
 clearTicketsBtn?.addEventListener("click", () => {
   localStorage.removeItem("rl_tickets");
+  liveTickets = [];
   renderAdminLists();
 });
 
 clearReportsBtn?.addEventListener("click", () => {
   localStorage.removeItem("rl_reports");
+  liveReports = [];
   renderAdminLists();
 });
 
 publishMaintenanceBtn?.addEventListener("click", () => {
   const msg = (maintenanceText.value || "").trim();
   if (!msg) return alert("Type a maintenance notice first.");
+
   localStorage.setItem("rl_maintenance", msg);
   socket.emit("maintenance", { message: msg });
-  alert("Published ✅");
+  setStatus("Maintenance published ✅");
 });
 
 /* ---------- Socket events ---------- */
@@ -429,9 +472,13 @@ socket.on("you-geo", ({ you }) => {
   setCountryUI();
 });
 
-socket.on("geo", ({ you, stranger }) => {
+socket.on("geo", ({ you, stranger, partner }) => {
   myCountryCode = (you || "??").toUpperCase();
-  partnerCountryCode = (stranger || "??").toUpperCase();
+
+  // supports either "stranger" or "partner" from server
+  const other = partner || stranger || "--";
+  partnerCountryCode = (other || "--").toUpperCase();
+
   setCountryUI();
 });
 
@@ -444,7 +491,6 @@ socket.on("matched", async ({ role }) => {
 
   setStatus("Matched ✅ Starting call…");
 
-  // caller creates offer
   if (myRole === "caller") {
     try {
       await startAsCaller();
@@ -456,7 +502,6 @@ socket.on("matched", async ({ role }) => {
 });
 
 socket.on("partner-left", () => {
-  addChatLine("system", "New Partner left.");
   cleanupPeer();
   nextBtn.disabled = false;
   stopBtn.disabled = false;
@@ -472,11 +517,17 @@ socket.on("stopped", () => {
 });
 
 socket.on("chat", ({ from, text }) => {
-  if (from === "you" || from === "stranger") {
-    addChatLine(from === "you" ? "you" : "partner", text);
-  } else {
-    addChatLine("partner", text);
+  if (from === "you") {
+    addChatLine("you", text);
+    return;
   }
+
+  if (from === "partner" || from === "stranger") {
+    addChatLine("partner", text);
+    return;
+  }
+
+  addChatLine("partner", text);
 });
 
 socket.on("signal", async ({ type, data }) => {
@@ -489,10 +540,21 @@ socket.on("signal", async ({ type, data }) => {
   }
 });
 
-/* Optional: maintenance broadcast if you add server support */
 socket.on("maintenance", ({ message }) => {
   if (!message) return;
+  maintenanceText.value = message;
   setStatus("Maintenance: " + message);
+});
+
+/* ---------- Live Admin Updates ---------- */
+socket.on("admin-support-update", (tickets) => {
+  liveTickets = Array.isArray(tickets) ? tickets : [];
+  renderAdminLists();
+});
+
+socket.on("admin-report-update", (reports) => {
+  liveReports = Array.isArray(reports) ? reports : [];
+  renderAdminLists();
 });
 
 /* ---------- Boot ---------- */
@@ -501,20 +563,15 @@ socket.on("maintenance", ({ message }) => {
   populateCountries();
   detectCountry();
 
-  // Admin mode: enable tab
   if (isAdminMode()) {
     enableAdminUI();
     renderAdminLists();
+    socket.emit("request-admin-data");
     setStatus("Admin mode enabled ✅");
-  } else {
-    // If not admin, still render lists in background storage
-    // (no UI)
   }
 
-  // Show saved maintenance message to all users (local)
   const savedMaint = localStorage.getItem("rl_maintenance");
-  if (savedMaint) {
-    // Only show if you want to keep it visible:
-    // setStatus("Maintenance: " + savedMaint);
+  if (savedMaint && !maintenanceText.value) {
+    maintenanceText.value = savedMaint;
   }
 })();
