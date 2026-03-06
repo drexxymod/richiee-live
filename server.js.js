@@ -246,6 +246,12 @@ function populateCountries() {
   }
 }
 
+/* ✅ COUNTRY FILTER CHANGE */
+countrySelect.addEventListener("change", () => {
+  const selected = countrySelect.value || "ANY";
+  socket.emit("set-country-filter", { country: selected });
+});
+
 /* ---------- Buttons ---------- */
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
@@ -254,6 +260,10 @@ startBtn.addEventListener("click", async () => {
 
   try {
     await ensureMedia();
+
+    /* ✅ COUNTRY FILTER CHANGE */
+    socket.emit("set-country-filter", { country: countrySelect.value || "ANY" });
+
     socket.emit("start");
     setStatus("Finding a New Partner…");
   } catch {
@@ -264,6 +274,10 @@ startBtn.addEventListener("click", async () => {
 
 nextBtn.addEventListener("click", () => {
   cleanupPeer();
+
+  /* ✅ COUNTRY FILTER CHANGE */
+  socket.emit("set-country-filter", { country: countrySelect.value || "ANY" });
+
   socket.emit("next");
   nextBtn.disabled = true;
   stopBtn.disabled = false;
@@ -479,6 +493,9 @@ socket.on("maintenance", ({ message }) => {
   setCountryUI();
   populateCountries();
   detectCountry();
+
+  /* ✅ COUNTRY FILTER CHANGE */
+  socket.emit("set-country-filter", { country: countrySelect.value || "ANY" });
 
   nextBtn.disabled = true;
   stopBtn.disabled = true;
