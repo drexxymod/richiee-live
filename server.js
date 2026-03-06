@@ -26,7 +26,7 @@ let maintenanceNotice = "";
 /* ---------------- HELPERS ---------------- */
 
 function removeFromQueue(socketId) {
-  waitingUsers = waitingUsers.filter(id => id !== socketId);
+  waitingUsers = waitingUsers.filter((id) => id !== socketId);
 }
 
 function safeEmit(to, event, payload) {
@@ -34,7 +34,7 @@ function safeEmit(to, event, payload) {
 }
 
 function broadcastOnlineCount() {
-  const count = io.engine.clientsCount || 0;
+  const count = io.of("/").sockets.size;
   io.emit("online-count", { count });
 }
 
@@ -61,9 +61,10 @@ function matchUsers(socket) {
 
     const pref = matchPreferences[socket.id] || "ANY";
     socket.emit("status", {
-      message: pref === "ANY"
-        ? "Waiting for new partner..."
-        : `Waiting for new partner from ${pref}...`
+      message:
+        pref === "ANY"
+          ? "Waiting for new partner..."
+          : `Waiting for new partner from ${pref}...`,
     });
 
     return;
@@ -90,9 +91,10 @@ function matchUsers(socket) {
 
     const pref = matchPreferences[socket.id] || "ANY";
     socket.emit("status", {
-      message: pref === "ANY"
-        ? "Waiting for new partner..."
-        : `Waiting for new partner from ${pref}...`
+      message:
+        pref === "ANY"
+          ? "Waiting for new partner..."
+          : `Waiting for new partner from ${pref}...`,
     });
 
     return;
@@ -109,12 +111,12 @@ function matchUsers(socket) {
 
   socket.emit("geo", {
     you: countryA,
-    stranger: countryB
+    stranger: countryB,
   });
 
   safeEmit(partnerId, "geo", {
     you: countryB,
-    stranger: countryA
+    stranger: countryA,
   });
 
   if (maintenanceNotice) {
@@ -127,19 +129,21 @@ function matchUsers(socket) {
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
-  broadcastOnlineCount();
 
   matchPreferences[socket.id] = "ANY";
+  broadcastOnlineCount();
 
   socket.emit("status", {
-    message: "Connected. Press Start."
+    message: "Connected. Press Start.",
   });
+
+  socket.emit("online-count", { count: io.of("/").sockets.size });
 
   socket.on("client-geo", ({ country }) => {
     countries[socket.id] = country || "??";
 
     socket.emit("you-geo", {
-      you: countries[socket.id]
+      you: countries[socket.id],
     });
   });
 
@@ -151,9 +155,10 @@ io.on("connection", (socket) => {
       waitingUsers.push(socket.id);
 
       socket.emit("status", {
-        message: matchPreferences[socket.id] === "ANY"
-          ? "Waiting for new partner..."
-          : `Waiting for new partner from ${matchPreferences[socket.id]}...`
+        message:
+          matchPreferences[socket.id] === "ANY"
+            ? "Waiting for new partner..."
+            : `Waiting for new partner from ${matchPreferences[socket.id]}...`,
       });
     }
   });
@@ -168,7 +173,6 @@ io.on("connection", (socket) => {
 
     if (partner) {
       safeEmit(partner, "partner-left");
-
       delete partners[partner];
       delete partners[socket.id];
     }
@@ -181,7 +185,6 @@ io.on("connection", (socket) => {
 
     if (partner) {
       safeEmit(partner, "partner-left");
-
       delete partners[partner];
       delete partners[socket.id];
     } else {
@@ -193,7 +196,6 @@ io.on("connection", (socket) => {
 
   socket.on("signal", ({ type, data }) => {
     const partner = partners[socket.id];
-
     if (!partner) return;
 
     safeEmit(partner, "signal", { type, data });
@@ -201,17 +203,16 @@ io.on("connection", (socket) => {
 
   socket.on("chat", ({ text }) => {
     const partner = partners[socket.id];
-
     if (!partner) return;
 
     safeEmit(partner, "chat", {
       from: "partner",
-      text
+      text,
     });
 
     socket.emit("chat", {
       from: "you",
-      text
+      text,
     });
   });
 
@@ -221,7 +222,7 @@ io.on("connection", (socket) => {
       time: ticket?.time || new Date().toLocaleString(),
       category: ticket?.category || "General",
       message: String(ticket?.message || "").slice(0, 1000),
-      fromCountry: ticket?.fromCountry || "??"
+      fromCountry: ticket?.fromCountry || "??",
     };
 
     supportTickets.unshift(cleanTicket);
@@ -236,7 +237,7 @@ io.on("connection", (socket) => {
       reason: report?.reason || "Other",
       details: String(report?.details || "").slice(0, 1000),
       fromCountry: report?.fromCountry || "??",
-      partnerCountry: report?.partnerCountry || "??"
+      partnerCountry: report?.partnerCountry || "??",
     };
 
     abuseReports.unshift(cleanReport);
@@ -248,7 +249,7 @@ io.on("connection", (socket) => {
     maintenanceNotice = String(message || "").slice(0, 1000);
 
     io.emit("maintenance", {
-      message: maintenanceNotice
+      message: maintenanceNotice,
     });
 
     console.log("Maintenance updated:", maintenanceNotice);

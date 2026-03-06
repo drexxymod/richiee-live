@@ -2,6 +2,7 @@ const socket = io();
 
 /* ---------- Elements ---------- */
 const statusEl = document.getElementById("status");
+const onlineCountEl = document.getElementById("onlineCount");
 
 const youFlag = document.getElementById("youFlag");
 const partnerFlag = document.getElementById("partnerFlag");
@@ -19,7 +20,10 @@ const stopBtn = document.getElementById("stopBtn");
 const camBtn = document.getElementById("camBtn");
 const micBtn = document.getElementById("micBtn");
 
-const chatBtn = document.getElementById("chatBtn");
+const chatBox = document.getElementById("chatBox");
+const chatForm = document.getElementById("chatForm");
+const chatInput = document.getElementById("chatInput");
+
 const supportBtn = document.getElementById("supportBtn");
 const abuseBtn = document.getElementById("abuseBtn");
 const contributeBtn = document.getElementById("contributeBtn");
@@ -37,9 +41,6 @@ let matched = false;
 let myRole = null;
 let myCountryCode = "??";
 let partnerCountryCode = "??";
-
-let liveTickets = [];
-let liveReports = [];
 
 const RTC_CONFIG = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -79,13 +80,12 @@ function setCountryUI() {
   }
 }
 
-function escapeHtml(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function addChatLine(from, text) {
+  const line = document.createElement("div");
+  line.className = "chatLine " + (from === "you" ? "me" : "them");
+  line.textContent = (from === "you" ? "You: " : "New Partner: ") + text;
+  chatBox.appendChild(line);
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 function saveLocalList(key, item) {
@@ -93,10 +93,6 @@ function saveLocalList(key, item) {
   arr.unshift(item);
   localStorage.setItem(key, JSON.stringify(arr));
   return arr;
-}
-
-function loadLocalList(key) {
-  return JSON.parse(localStorage.getItem(key) || "[]");
 }
 
 /* ---------- Modal ---------- */
@@ -113,8 +109,8 @@ function closeModal() {
   modalBody.innerHTML = "";
 }
 
-if (modalBackdrop) modalBackdrop.addEventListener("click", closeModal);
-if (modalClose) modalClose.addEventListener("click", closeModal);
+modalBackdrop.addEventListener("click", closeModal);
+modalClose.addEventListener("click", closeModal);
 
 /* ---------- Media ---------- */
 async function ensureMedia() {
@@ -270,6 +266,7 @@ startBtn.addEventListener("click", async () => {
 
 nextBtn.addEventListener("click", () => {
   cleanupPeer();
+  socket.emit("set-country-filter", { country: countrySelect.value || "ANY" });
   socket.emit("next");
   nextBtn.disabled = true;
   stopBtn.disabled = false;
@@ -297,26 +294,15 @@ micBtn.addEventListener("click", () => {
   setMicEnabled(!on);
 });
 
-/* ---------- Popups ---------- */
-chatBtn.addEventListener("click", () => {
-  const tpl = document.getElementById("chatTemplate").innerHTML;
-  openModal("Chat", tpl);
-
-  const chatBoxPopup = document.getElementById("chatBoxPopup");
-  const chatFormPopup = document.getElementById("chatFormPopup");
-  const chatInputPopup = document.getElementById("chatInputPopup");
-
-  chatBoxPopup.innerHTML = chatBox.innerHTML;
-
-  chatFormPopup.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = (chatInputPopup.value || "").trim();
-    if (!text) return;
-    socket.emit("chat", { text });
-    chatInputPopup.value = "";
-  });
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = (chatInput.value || "").trim();
+  if (!text) return;
+  socket.emit("chat", { text });
+  chatInput.value = "";
 });
 
+/* ---------- Popups ---------- */
 supportBtn.addEventListener("click", () => {
   const tpl = document.getElementById("supportTemplate").innerHTML;
   openModal("Support", tpl);
@@ -402,6 +388,11 @@ contributeBtn.addEventListener("click", () => {
 });
 
 /* ---------- Socket ---------- */
+socket.on("online-count", ({ count }) => {
+  if (!onlineCountEl) return;
+  onlineCountEl.textContent = `🔥 ${count} people online`;
+});
+
 socket.on("status", ({ message }) => {
   setStatus(message || "");
 });
@@ -451,18 +442,7 @@ socket.on("stopped", () => {
 });
 
 socket.on("chat", ({ from, text }) => {
-  const box = modalBody.querySelector("#chatBoxPopup");
-  const line = document.createElement("div");
-  line.className = "chatLine " + (from === "you" ? "me" : "them");
-  line.textContent = (from === "you" ? "You: " : "New Partner: ") + text;
-
-  chatBox.appendChild(line);
-  chatBox.scrollTop = chatBox.scrollHeight;
-
-  if (box) {
-    box.appendChild(line.cloneNode(true));
-    box.scrollTop = box.scrollHeight;
-  }
+  addChatLine(from === "you" ? "you" : "partner", text);
 });
 
 socket.on("signal", async ({ type, data }) => {
@@ -485,6 +465,7 @@ socket.on("maintenance", ({ message }) => {
   setCountryUI();
   populateCountries();
   detectCountry();
+  socket.emit("set-country-filter", { country: countrySelect.value || "ANY" });
 
   nextBtn.disabled = true;
   stopBtn.disabled = true;
