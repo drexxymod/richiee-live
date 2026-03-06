@@ -113,8 +113,8 @@ function closeModal() {
   modalBody.innerHTML = "";
 }
 
-modalBackdrop.addEventListener("click", closeModal);
-modalClose.addEventListener("click", closeModal);
+if (modalBackdrop) modalBackdrop.addEventListener("click", closeModal);
+if (modalClose) modalClose.addEventListener("click", closeModal);
 
 /* ---------- Media ---------- */
 async function ensureMedia() {
@@ -246,6 +246,11 @@ function populateCountries() {
   }
 }
 
+countrySelect.addEventListener("change", () => {
+  const selected = countrySelect.value || "ANY";
+  socket.emit("set-country-filter", { country: selected });
+});
+
 /* ---------- Buttons ---------- */
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
@@ -254,6 +259,7 @@ startBtn.addEventListener("click", async () => {
 
   try {
     await ensureMedia();
+    socket.emit("set-country-filter", { country: countrySelect.value || "ANY" });
     socket.emit("start");
     setStatus("Finding a New Partner…");
   } catch {

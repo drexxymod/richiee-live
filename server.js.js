@@ -1,247 +1,485 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
+const socket = io();
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+/* ---------- Elements ---------- */
+const statusEl = document.getElementById("status");
 
-app.use(express.static("public"));
+const youFlag = document.getElementById("youFlag");
+const partnerFlag = document.getElementById("partnerFlag");
+const youCountryEl = document.getElementById("youCountry");
+const partnerCountryEl = document.getElementById("partnerCountry");
 
-const PORT = process.env.PORT || 3000;
+const countrySelect = document.getElementById("countrySelect");
 
-/* ---------------- USERS ---------------- */
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
 
-let waitingUsers = [];
-let partners = {};
-let countries = {};
+const startBtn = document.getElementById("startBtn");
+const nextBtn = document.getElementById("nextBtn");
+const stopBtn = document.getElementById("stopBtn");
+const camBtn = document.getElementById("camBtn");
+const micBtn = document.getElementById("micBtn");
 
-/* ---------------- SUPPORT / REPORT / MAINTENANCE ---------------- */
+const chatBtn = document.getElementById("chatBtn");
+const supportBtn = document.getElementById("supportBtn");
+const abuseBtn = document.getElementById("abuseBtn");
+const contributeBtn = document.getElementById("contributeBtn");
 
-let supportTickets = [];
-let abuseReports = [];
-let maintenanceNotice = "";
+const modalBackdrop = document.getElementById("modalBackdrop");
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modalTitle");
+const modalBody = document.getElementById("modalBody");
+const modalClose = document.getElementById("modalClose");
 
-/* ---------------- HELPERS ---------------- */
+/* ---------- State ---------- */
+let localStream = null;
+let pc = null;
+let matched = false;
+let myRole = null;
+let myCountryCode = "??";
+let partnerCountryCode = "??";
 
-function removeFromQueue(socketId) {
-  waitingUsers = waitingUsers.filter(id => id !== socketId);
+let liveTickets = [];
+let liveReports = [];
+
+const RTC_CONFIG = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+};
+
+/* ---------- Helpers ---------- */
+function setStatus(msg) {
+  statusEl.textContent = msg;
 }
 
-function safeEmit(to, event, payload) {
-  io.to(to).emit(event, payload);
+function countryFlagUrl(code) {
+  if (!code || code === "??" || code === "--") return "";
+  return `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
 }
 
-/* ---------------- MATCH USERS ---------------- */
+function setCountryUI() {
+  youCountryEl.textContent = myCountryCode || "??";
+  partnerCountryEl.textContent = partnerCountryCode || "--";
 
-function matchUsers(socket) {
-  removeFromQueue(socket.id);
+  const yourFlagUrl = countryFlagUrl(myCountryCode);
+  const partnerFlagUrl = countryFlagUrl(partnerCountryCode);
 
-  if (waitingUsers.length === 0) {
-    waitingUsers.push(socket.id);
-
-    socket.emit("status", {
-      message: "Waiting for new partner..."
-    });
-
-    return;
+  if (yourFlagUrl) {
+    youFlag.src = yourFlagUrl;
+    youFlag.style.display = "inline-block";
+  } else {
+    youFlag.removeAttribute("src");
+    youFlag.style.display = "none";
   }
 
-  let partnerId = null;
-
-  while (waitingUsers.length > 0) {
-    const candidate = waitingUsers.shift();
-
-    if (candidate !== socket.id && io.sockets.sockets.get(candidate)) {
-      partnerId = candidate;
-      break;
-    }
-  }
-
-  if (!partnerId) {
-    waitingUsers.push(socket.id);
-
-    socket.emit("status", {
-      message: "Waiting for new partner..."
-    });
-
-    return;
-  }
-
-  partners[socket.id] = partnerId;
-  partners[partnerId] = socket.id;
-
-  socket.emit("matched", { role: "caller" });
-  safeEmit(partnerId, "matched", { role: "callee" });
-
-  const countryA = countries[socket.id] || "??";
-  const countryB = countries[partnerId] || "??";
-
-  socket.emit("geo", {
-    you: countryA,
-    stranger: countryB
-  });
-
-  safeEmit(partnerId, "geo", {
-    you: countryB,
-    stranger: countryA
-  });
-
-  if (maintenanceNotice) {
-    socket.emit("maintenance", { message: maintenanceNotice });
-    safeEmit(partnerId, "maintenance", { message: maintenanceNotice });
+  if (partnerFlagUrl) {
+    partnerFlag.src = partnerFlagUrl;
+    partnerFlag.style.display = "inline-block";
+  } else {
+    partnerFlag.removeAttribute("src");
+    partnerFlag.style.display = "none";
   }
 }
 
-/* ---------------- SOCKET CONNECTION ---------------- */
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+function saveLocalList(key, item) {
+  const arr = JSON.parse(localStorage.getItem(key) || "[]");
+  arr.unshift(item);
+  localStorage.setItem(key, JSON.stringify(arr));
+  return arr;
+}
 
-  socket.emit("status", {
-    message: "Connected. Press Start."
-  });
+function loadLocalList(key) {
+  return JSON.parse(localStorage.getItem(key) || "[]");
+}
 
-  socket.on("client-geo", ({ country }) => {
-    countries[socket.id] = country || "??";
+/* ---------- Modal ---------- */
+function openModal(title, html) {
+  modalTitle.textContent = title;
+  modalBody.innerHTML = html;
+  modalBackdrop.classList.remove("hidden");
+  modal.classList.remove("hidden");
+}
 
-    socket.emit("you-geo", {
-      you: countries[socket.id]
+function closeModal() {
+  modalBackdrop.classList.add("hidden");
+  modal.classList.add("hidden");
+  modalBody.innerHTML = "";
+}
+
+modalBackdrop.addEventListener("click", closeModal);
+modalClose.addEventListener("click", closeModal);
+
+/* ---------- Media ---------- */
+async function ensureMedia() {
+  if (localStream) return localStream;
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
     });
-  });
 
-  socket.on("start", () => {
-    if (partners[socket.id]) return;
-    matchUsers(socket);
-  });
+    localVideo.srcObject = localStream;
 
-  socket.on("next", () => {
-    const partner = partners[socket.id];
+    camBtn.disabled = false;
+    micBtn.disabled = false;
 
-    if (partner) {
-      safeEmit(partner, "partner-left");
+    setCamEnabled(true);
+    setMicEnabled(true);
 
-      delete partners[partner];
-      delete partners[socket.id];
+    return localStream;
+  } catch (err) {
+    console.error(err);
+    setStatus("Camera/mic blocked. Allow permission then refresh.");
+    throw err;
+  }
+}
+
+function setCamEnabled(on) {
+  if (!localStream) return;
+  localStream.getVideoTracks().forEach(t => (t.enabled = on));
+  camBtn.textContent = on ? "Camera Off" : "Camera On";
+}
+
+function setMicEnabled(on) {
+  if (!localStream) return;
+  localStream.getAudioTracks().forEach(t => (t.enabled = on));
+  micBtn.textContent = on ? "Mute" : "Unmute";
+}
+
+/* ---------- WebRTC ---------- */
+async function createPeerConnection() {
+  if (pc) {
+    try { pc.close(); } catch {}
+    pc = null;
+  }
+
+  pc = new RTCPeerConnection(RTC_CONFIG);
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit("signal", { type: "ice", data: event.candidate });
     }
+  };
 
-    matchUsers(socket);
-  });
+  pc.ontrack = (event) => {
+    remoteVideo.srcObject = event.streams[0];
+  };
 
-  socket.on("stop", () => {
-    const partner = partners[socket.id];
+  const stream = await ensureMedia();
+  stream.getTracks().forEach(track => pc.addTrack(track, stream));
+}
 
-    if (partner) {
-      safeEmit(partner, "partner-left");
+async function startAsCaller() {
+  await createPeerConnection();
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit("signal", { type: "offer", data: offer });
+}
 
-      delete partners[partner];
-      delete partners[socket.id];
-    } else {
-      removeFromQueue(socket.id);
+async function handleOffer(offer) {
+  await createPeerConnection();
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit("signal", { type: "answer", data: answer });
+}
+
+async function handleAnswer(answer) {
+  if (!pc) return;
+  await pc.setRemoteDescription(answer);
+}
+
+async function handleIce(candidate) {
+  if (!pc) return;
+  try {
+    await pc.addIceCandidate(candidate);
+  } catch (e) {
+    console.warn("ICE add failed:", e);
+  }
+}
+
+function cleanupPeer() {
+  matched = false;
+  myRole = null;
+  partnerCountryCode = "--";
+  setCountryUI();
+
+  remoteVideo.srcObject = null;
+
+  if (pc) {
+    try { pc.close(); } catch {}
+    pc = null;
+  }
+}
+
+/* ---------- Country ---------- */
+async function detectCountry() {
+  try {
+    const res = await fetch("https://ipapi.co/json/");
+    const data = await res.json();
+    if (data && data.country_code) {
+      myCountryCode = data.country_code.toUpperCase();
+      socket.emit("client-geo", { country: myCountryCode });
+      setCountryUI();
     }
+  } catch {
+    // ignore
+  }
+}
 
-    socket.emit("stopped");
-  });
-
-  socket.on("signal", ({ type, data }) => {
-    const partner = partners[socket.id];
-
-    if (!partner) return;
-
-    safeEmit(partner, "signal", { type, data });
-  });
-
-  socket.on("chat", ({ text }) => {
-    const partner = partners[socket.id];
-
-    if (!partner) return;
-
-    safeEmit(partner, "chat", {
-      from: "partner",
-      text
-    });
-
-    socket.emit("chat", {
-      from: "you",
-      text
-    });
-  });
-
-  /* ---------------- LIVE SUPPORT TICKETS ---------------- */
-
-  socket.on("support-ticket", (ticket) => {
-    const cleanTicket = {
-      id: `ticket_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
-      time: ticket?.time || new Date().toLocaleString(),
-      category: ticket?.category || "General",
-      message: String(ticket?.message || "").slice(0, 1000),
-      fromCountry: ticket?.fromCountry || "??"
-    };
-
-    supportTickets.unshift(cleanTicket);
-
-    // send live to all admin viewers
-    io.emit("admin-support-update", supportTickets);
-    console.log("Support ticket received:", cleanTicket);
-  });
-
-  /* ---------------- LIVE ABUSE REPORTS ---------------- */
-
-  socket.on("abuse-report", (report) => {
-    const cleanReport = {
-      id: `report_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
-      time: report?.time || new Date().toLocaleString(),
-      reason: report?.reason || "Other",
-      details: String(report?.details || "").slice(0, 1000),
-      fromCountry: report?.fromCountry || "??",
-      partnerCountry: report?.partnerCountry || "??"
-    };
-
-    abuseReports.unshift(cleanReport);
-
-    io.emit("admin-report-update", abuseReports);
-    console.log("Abuse report received:", cleanReport);
-  });
-
-  /* ---------------- MAINTENANCE NOTICE ---------------- */
-
-  socket.on("maintenance", ({ message }) => {
-    maintenanceNotice = String(message || "").slice(0, 1000);
-
-    io.emit("maintenance", {
-      message: maintenanceNotice
-    });
-
-    console.log("Maintenance updated:", maintenanceNotice);
-  });
-
-  /* ---------------- ADMIN REQUESTS ---------------- */
-
-  socket.on("request-admin-data", () => {
-    socket.emit("admin-support-update", supportTickets);
-    socket.emit("admin-report-update", abuseReports);
-    socket.emit("maintenance", { message: maintenanceNotice });
-  });
-
-  socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
-
-    const partner = partners[socket.id];
-
-    if (partner) {
-      safeEmit(partner, "partner-left");
-      delete partners[partner];
+function populateCountries() {
+  if (window.COUNTRIES && Array.isArray(window.COUNTRIES)) {
+    for (const c of window.COUNTRIES) {
+      const opt = document.createElement("option");
+      opt.value = c.code;
+      opt.textContent = c.name;
+      countrySelect.appendChild(opt);
     }
+  }
+}
 
-    delete partners[socket.id];
-    delete countries[socket.id];
+/* ---------- Buttons ---------- */
+startBtn.addEventListener("click", async () => {
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  nextBtn.disabled = true;
 
-    removeFromQueue(socket.id);
+  try {
+    await ensureMedia();
+    socket.emit("start");
+    setStatus("Finding a New Partner…");
+  } catch {
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+});
+
+nextBtn.addEventListener("click", () => {
+  cleanupPeer();
+  socket.emit("next");
+  nextBtn.disabled = true;
+  stopBtn.disabled = false;
+  setStatus("Finding a New Partner…");
+});
+
+stopBtn.addEventListener("click", () => {
+  cleanupPeer();
+  socket.emit("stop");
+  setStatus("Stopped.");
+  startBtn.disabled = false;
+  nextBtn.disabled = true;
+  stopBtn.disabled = true;
+});
+
+camBtn.addEventListener("click", () => {
+  if (!localStream) return;
+  const on = localStream.getVideoTracks().some(t => t.enabled);
+  setCamEnabled(!on);
+});
+
+micBtn.addEventListener("click", () => {
+  if (!localStream) return;
+  const on = localStream.getAudioTracks().some(t => t.enabled);
+  setMicEnabled(!on);
+});
+
+/* ---------- Popups ---------- */
+chatBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("chatTemplate").innerHTML;
+  openModal("Chat", tpl);
+
+  const chatBoxPopup = document.getElementById("chatBoxPopup");
+  const chatFormPopup = document.getElementById("chatFormPopup");
+  const chatInputPopup = document.getElementById("chatInputPopup");
+
+  chatBoxPopup.innerHTML = chatBox.innerHTML;
+
+  chatFormPopup.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = (chatInputPopup.value || "").trim();
+    if (!text) return;
+    socket.emit("chat", { text });
+    chatInputPopup.value = "";
   });
 });
 
-/* ---------------- START SERVER ---------------- */
+supportBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("supportTemplate").innerHTML;
+  openModal("Support", tpl);
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  const form = document.getElementById("supportFormPopup");
+  const category = document.getElementById("supportCategoryPopup");
+  const message = document.getElementById("supportMessagePopup");
+  const status = document.getElementById("supportStatusPopup");
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const ticket = {
+      time: new Date().toLocaleString(),
+      category: category.value,
+      message: (message.value || "").trim(),
+      fromCountry: myCountryCode
+    };
+
+    if (!ticket.message) {
+      status.textContent = "Type a message first.";
+      return;
+    }
+
+    saveLocalList("rl_tickets", ticket);
+    socket.emit("support-ticket", ticket);
+    message.value = "";
+    status.textContent = "Sent ✅";
+  });
 });
+
+abuseBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("abuseTemplate").innerHTML;
+  openModal("Report issue", tpl);
+
+  const form = document.getElementById("abuseFormPopup");
+  const reason = document.getElementById("abuseReasonPopup");
+  const details = document.getElementById("abuseDetailsPopup");
+  const status = document.getElementById("abuseStatusPopup");
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const report = {
+      time: new Date().toLocaleString(),
+      reason: reason.value,
+      details: (details.value || "").trim(),
+      fromCountry: myCountryCode,
+      partnerCountry: partnerCountryCode
+    };
+
+    saveLocalList("rl_reports", report);
+    socket.emit("abuse-report", report);
+    details.value = "";
+    status.textContent = "Report submitted ✅";
+  });
+});
+
+contributeBtn.addEventListener("click", () => {
+  const tpl = document.getElementById("contributeTemplate").innerHTML;
+  openModal("Contribute", tpl);
+
+  const till = document.getElementById("mpesaTillPopup");
+  const copyBtn = document.getElementById("copyTillBtnPopup");
+  const usd = document.getElementById("usdLinkPopup");
+  const openBtn = document.getElementById("openUsdBtnPopup");
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(till.textContent.trim());
+      copyBtn.textContent = "Copied ✅";
+      setTimeout(() => (copyBtn.textContent = "Copy Till"), 1200);
+    } catch {
+      alert("Copy failed. Till: " + till.textContent.trim());
+    }
+  });
+
+  openBtn.addEventListener("click", () => {
+    const link = (usd.value || "").trim();
+    if (!link) return alert("Paste your USD link first.");
+    window.open(link, "_blank", "noopener,noreferrer");
+  });
+});
+
+/* ---------- Socket ---------- */
+socket.on("status", ({ message }) => {
+  setStatus(message || "");
+});
+
+socket.on("you-geo", ({ you }) => {
+  myCountryCode = (you || "??").toUpperCase();
+  setCountryUI();
+});
+
+socket.on("geo", ({ you, stranger, partner }) => {
+  myCountryCode = (you || "??").toUpperCase();
+  const other = partner || stranger || "--";
+  partnerCountryCode = (other || "--").toUpperCase();
+  setCountryUI();
+});
+
+socket.on("matched", async ({ role }) => {
+  matched = true;
+  myRole = role;
+  nextBtn.disabled = false;
+  stopBtn.disabled = false;
+  setStatus("Matched ✅ Starting call…");
+
+  if (myRole === "caller") {
+    try {
+      await startAsCaller();
+    } catch (e) {
+      console.error(e);
+      setStatus("Call failed. Try Next.");
+    }
+  }
+});
+
+socket.on("partner-left", () => {
+  cleanupPeer();
+  nextBtn.disabled = false;
+  stopBtn.disabled = false;
+  setStatus("New Partner left. Press Next.");
+});
+
+socket.on("stopped", () => {
+  cleanupPeer();
+  setStatus("Stopped.");
+  startBtn.disabled = false;
+  nextBtn.disabled = true;
+  stopBtn.disabled = true;
+});
+
+socket.on("chat", ({ from, text }) => {
+  const box = modalBody.querySelector("#chatBoxPopup");
+  const line = document.createElement("div");
+  line.className = "chatLine " + (from === "you" ? "me" : "them");
+  line.textContent = (from === "you" ? "You: " : "New Partner: ") + text;
+
+  chatBox.appendChild(line);
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  if (box) {
+    box.appendChild(line.cloneNode(true));
+    box.scrollTop = box.scrollHeight;
+  }
+});
+
+socket.on("signal", async ({ type, data }) => {
+  try {
+    if (type === "offer") await handleOffer(data);
+    if (type === "answer") await handleAnswer(data);
+    if (type === "ice") await handleIce(data);
+  } catch (e) {
+    console.error("Signal error:", e);
+  }
+});
+
+socket.on("maintenance", ({ message }) => {
+  if (!message) return;
+  setStatus("Maintenance: " + message);
+});
+
+/* ---------- Boot ---------- */
+(function boot() {
+  setCountryUI();
+  populateCountries();
+  detectCountry();
+
+  nextBtn.disabled = true;
+  stopBtn.disabled = true;
+})();
