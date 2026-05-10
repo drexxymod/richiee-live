@@ -4,12 +4,29 @@
   box-sizing: border-box;
 }
 
+:root {
+  --bg-main: #050816;
+  --bg-soft: #0f172a;
+  --card: rgba(15, 23, 42, 0.88);
+  --card-strong: #111827;
+  --border: rgba(255, 255, 255, 0.08);
+  --gold: #facc15;
+  --gold-deep: #f59e0b;
+  --green: #22c55e;
+  --red: #ef4444;
+  --text: #ffffff;
+  --muted: #94a3b8;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  background: #0b0f1a;
-  color: #ffffff;
+  background:
+    radial-gradient(circle at top left, rgba(250, 204, 21, 0.16), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.15), transparent 35%),
+    var(--bg-main);
+  color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -21,39 +38,63 @@ body {
 
 header {
   text-align: center;
-  padding: 20px 16px 10px;
+  padding: 28px 16px 12px;
+  position: relative;
+}
+
+header::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 850px);
+  height: 220px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(245, 158, 11, 0.08));
+  filter: blur(60px);
+  z-index: -1;
 }
 
 header h1 {
   margin: 0;
-  font-size: 3rem;
-  font-weight: 800;
-  letter-spacing: -1px;
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  font-weight: 900;
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, #ffffff, var(--gold));
+  -webkit-background-clip: text;
+  color: transparent;
 }
 
 #status {
-  margin: 8px 0 0;
-  color: #d7def1;
-  font-weight: 700;
+  margin: 10px auto 0;
+  color: #e2e8f0;
+  font-weight: 800;
   font-size: 1rem;
+  max-width: 680px;
 }
 
 .onlineCount {
-  margin: 8px 0 0;
-  color: #64ff9a;
-  font-weight: 800;
-  font-size: 1rem;
+  display: inline-flex;
+  margin: 14px auto 0;
+  color: #06120b;
+  background: linear-gradient(135deg, var(--green), #86efac);
+  font-weight: 900;
+  font-size: 0.95rem;
+  padding: 9px 16px;
+  border-radius: 999px;
+  box-shadow: 0 0 30px rgba(34, 197, 94, 0.22);
 }
 
 /* ---------------- TOP BAR ---------------- */
 
 .topbar {
-  margin-top: 18px;
+  margin: 22px auto 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
+  max-width: 980px;
 }
 
 .geo {
@@ -61,39 +102,46 @@ header h1 {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #141b2f;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 10px 14px;
   min-height: 44px;
-  font-weight: 700;
+  font-weight: 800;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.22);
 }
 
 .flag {
-  width: 22px;
-  height: 16px;
-  border-radius: 3px;
+  width: 24px;
+  height: 17px;
+  border-radius: 4px;
   object-fit: cover;
   display: inline-block;
+  background: #020617;
 }
 
 .filter {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: #141b2f;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 10px 14px;
   min-height: 44px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.22);
 }
 
 .filter label {
-  font-weight: 700;
+  font-weight: 900;
+  color: #e5e7eb;
 }
 
 .filter select {
@@ -101,18 +149,19 @@ header h1 {
   outline: none;
   background: #ffffff;
   color: #111111;
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 10px 14px;
-  min-width: 180px;
+  min-width: 190px;
   font-size: 0.95rem;
+  font-weight: 800;
 }
 
 /* ---------------- MAIN LAYOUT ---------------- */
 
 .layoutSingle {
-  max-width: 1200px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 14px 16px 24px;
+  padding: 18px 16px 28px;
 }
 
 .videos {
@@ -125,24 +174,44 @@ header h1 {
 }
 
 .card {
-  background: #141b2f;
-  border-radius: 14px;
-  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 14px;
+  box-shadow: 0 20px 55px rgba(0,0,0,0.28);
+  backdrop-filter: blur(14px);
 }
 
 .card h2 {
   margin: 0 0 10px;
-  font-size: 1.2rem;
-  font-weight: 800;
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card h2::after {
+  content: "LIVE";
+  font-size: 0.68rem;
+  background: rgba(34,197,94,0.16);
+  color: #86efac;
+  border: 1px solid rgba(34,197,94,0.28);
+  padding: 4px 8px;
+  border-radius: 999px;
 }
 
 video {
   width: 100%;
   display: block;
-  border-radius: 10px;
-  background: #000000;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at center, rgba(250,204,21,0.12), transparent 35%),
+    #000000;
   aspect-ratio: 3 / 4;
   object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
 /* ---------------- LIVE CHAT ---------------- */
@@ -151,24 +220,36 @@ video {
   margin-top: 18px;
 }
 
+.liveChatCard h2::after {
+  content: "CHAT";
+  background: rgba(250,204,21,0.14);
+  color: var(--gold);
+  border: 1px solid rgba(250,204,21,0.28);
+}
+
 .chatBox {
   height: 220px;
   overflow-y: auto;
-  background: #0e1526;
-  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.72);
+  border-radius: 16px;
   padding: 12px;
   margin-bottom: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
 }
 
 .chatLine {
   margin-bottom: 8px;
   line-height: 1.4;
   word-break: break-word;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
 }
 
 .chatLine.me {
-  color: #7cf5a3;
-  font-weight: 700;
+  color: #bbf7d0;
+  font-weight: 800;
+  background: rgba(34,197,94,0.1);
 }
 
 .chatLine.them {
@@ -183,21 +264,25 @@ video {
 
 .chatForm input {
   flex: 1;
-  border: none;
+  border: 1px solid rgba(255,255,255,0.1);
   outline: none;
-  border-radius: 10px;
-  padding: 12px 14px;
-  background: #ffffff;
-  color: #111111;
+  border-radius: 14px;
+  padding: 13px 15px;
+  background: #020617;
+  color: #ffffff;
+}
+
+.chatForm input::placeholder {
+  color: #64748b;
 }
 
 .chatForm button {
   border: none;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 12px 18px;
-  background: #ffffff;
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep));
   color: #111111;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
 }
 
@@ -212,49 +297,70 @@ video {
 }
 
 .actionBtn {
-  border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  background: #1f2a44;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 11px 18px;
+  background: rgba(31, 42, 68, 0.82);
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
 .actionBtn:hover {
-  background: #2f3f66;
+  background: rgba(47, 63, 102, 0.95);
+  transform: translateY(-2px);
 }
 
 /* ---------------- FOOTER CONTROLS ---------------- */
 
 .controls {
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
   display: flex;
   justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 20px 16px 28px;
+  padding: 16px;
+  background: linear-gradient(to top, rgba(2,6,23,0.96), rgba(2,6,23,0.72), transparent);
+  backdrop-filter: blur(10px);
 }
 
 .controls button {
   border: none;
-  border-radius: 10px;
-  padding: 12px 16px;
-  background: #1f2a44;
+  border-radius: 999px;
+  padding: 13px 18px;
+  background: rgba(31, 42, 68, 0.95);
   color: #ffffff;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
-  min-width: 105px;
-  transition: background 0.2s ease, opacity 0.2s ease;
+  min-width: 108px;
+  transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
 }
 
 .controls button:hover:not(:disabled) {
-  background: #2f3f66;
+  background: rgba(47, 63, 102, 1);
+  transform: translateY(-2px);
 }
 
 .controls button:disabled {
-  opacity: 0.5;
+  opacity: 0.42;
   cursor: not-allowed;
+}
+
+#startBtn {
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep));
+  color: #111111;
+  box-shadow: 0 10px 32px rgba(250,204,21,0.22);
+}
+
+#nextBtn {
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+}
+
+#stopBtn {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
 }
 
 /* ---------------- MODAL ---------------- */
@@ -262,8 +368,9 @@ video {
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.68);
   z-index: 1000;
+  backdrop-filter: blur(6px);
 }
 
 .modal {
@@ -271,13 +378,15 @@ video {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(92vw, 460px);
+  width: min(92vw, 480px);
   max-height: 85vh;
   overflow-y: auto;
-  background: #141b2f;
-  border-radius: 14px;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 22px;
   padding: 18px;
   z-index: 1001;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.45);
 }
 
 .modalHeader {
@@ -291,14 +400,17 @@ video {
 .modalHeader h3 {
   margin: 0;
   font-size: 1.2rem;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .modalHeader button {
   border: none;
-  background: transparent;
+  background: rgba(255,255,255,0.08);
   color: #ffffff;
-  font-size: 1.2rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  font-size: 1rem;
   cursor: pointer;
 }
 
@@ -320,19 +432,19 @@ video {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .form input,
 .form select,
 .form textarea {
   width: 100%;
-  border: none;
+  border: 1px solid rgba(255,255,255,0.1);
   outline: none;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: #ffffff;
-  color: #111111;
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: #020617;
+  color: #ffffff;
   font-size: 0.95rem;
 }
 
@@ -343,11 +455,11 @@ video {
 
 .form button {
   border: none;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 12px 14px;
-  background: #2f3f66;
-  color: #ffffff;
-  font-weight: 800;
+  background: linear-gradient(135deg, var(--gold), var(--gold-deep));
+  color: #111111;
+  font-weight: 900;
   cursor: pointer;
 }
 
@@ -358,9 +470,10 @@ video {
 }
 
 .contribCard {
-  background: #0e1526;
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(255,255,255,0.06);
   padding: 14px;
-  border-radius: 10px;
+  border-radius: 16px;
 }
 
 .contribCard h3 {
@@ -369,11 +482,11 @@ video {
 
 .contribCard button {
   border: none;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 10px 14px;
   background: #ffffff;
   color: #111111;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
   margin-top: 8px;
 }
@@ -393,10 +506,6 @@ video {
     grid-template-columns: 1fr;
   }
 
-  header h1 {
-    font-size: 2.5rem;
-  }
-
   .chatForm {
     flex-direction: column;
   }
@@ -408,11 +517,7 @@ video {
 
 @media (max-width: 520px) {
   header {
-    padding-top: 16px;
-  }
-
-  header h1 {
-    font-size: 2.1rem;
+    padding-top: 20px;
   }
 
   .topbar {
@@ -430,7 +535,13 @@ video {
     width: 100%;
   }
 
+  .pill {
+    flex: 1;
+    justify-content: center;
+  }
+
   .controls button {
     min-width: 92px;
+    flex: 1;
   }
 }

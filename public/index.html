@@ -6,36 +6,45 @@
   <title>Richiee Live 🌍</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
+
   <header>
     <h1>Richiee Live 🌍</h1>
+
     <p id="status">Connected. Press Start.</p>
     <p id="onlineCount" class="onlineCount">🔥 0 people online</p>
 
     <div class="topbar">
+
       <div class="geo">
         <span class="pill">
+          <span>You</span>
           <img id="youFlag" class="flag" alt="You flag" />
           <b id="youCountry">--</b>
         </span>
 
         <span class="pill">
-          <img id="partnerFlag" class="flag" alt="New Partner flag" />
+          <span>Partner</span>
+          <img id="partnerFlag" class="flag" alt="Partner flag" />
           <b id="partnerCountry">--</b>
         </span>
       </div>
 
       <div class="filter">
-        <label for="countrySelect">Match:</label>
+        <label for="countrySelect">Match</label>
         <select id="countrySelect">
           <option value="ANY">Any country</option>
         </select>
       </div>
+
     </div>
   </header>
 
   <main class="layoutSingle">
+
     <section class="videos twoVideos">
+
       <div class="card">
         <h2>You</h2>
         <video id="localVideo" autoplay playsinline muted></video>
@@ -45,14 +54,25 @@
         <h2>New Partner</h2>
         <video id="remoteVideo" autoplay playsinline></video>
       </div>
+
     </section>
 
     <section class="card liveChatCard">
-      <h2>Chat</h2>
-      <div id="chatBox" class="chatBox"></div>
+      <h2>Live Chat</h2>
+
+      <div id="chatBox" class="chatBox">
+        <div class="chatLine them">
+          Welcome to Richiee Live. Start a call and meet someone worldwide.
+        </div>
+      </div>
 
       <form id="chatForm" class="chatForm">
-        <input id="chatInput" type="text" placeholder="Type a message…" autocomplete="off" />
+        <input
+          id="chatInput"
+          type="text"
+          placeholder="Type a message…"
+          autocomplete="off"
+        />
         <button type="submit">Send</button>
       </form>
     </section>
@@ -62,6 +82,7 @@
       <button id="abuseBtn" class="actionBtn">Report issue</button>
       <button id="contributeBtn" class="actionBtn">Contribute</button>
     </section>
+
   </main>
 
   <footer class="controls">
@@ -85,7 +106,7 @@
   <template id="supportTemplate">
     <section class="popupSection">
       <h2>Support</h2>
-      <p class="muted">Send an issue or suggestion to Richiee Support.</p>
+      <p class="muted">Send an issue, bug report, or suggestion to Richiee Support.</p>
 
       <form id="supportFormPopup" class="form">
         <label>
@@ -93,6 +114,7 @@
           <select id="supportCategoryPopup">
             <option value="Suggestion">Suggestion</option>
             <option value="Bug">Bug / Not working</option>
+            <option value="Video issue">Video / Audio issue</option>
             <option value="Account">Account / Access</option>
             <option value="Payment">Payment / Contribution</option>
             <option value="Other">Other</option>
@@ -113,7 +135,9 @@
   <template id="abuseTemplate">
     <section class="popupSection">
       <h2>Report issue</h2>
-      <p class="muted">Report a New Partner for harassment, scams, nudity, threats, or other abuse.</p>
+      <p class="muted">
+        Report a partner for harassment, scams, nudity, threats, or unsafe behavior.
+      </p>
 
       <form id="abuseFormPopup" class="form">
         <label>
@@ -123,12 +147,13 @@
             <option value="Scam">Scam / Fraud</option>
             <option value="Sexual content">Sexual content</option>
             <option value="Hate / Violence">Hate / Violence</option>
+            <option value="Underage concern">Underage concern</option>
             <option value="Other">Other</option>
           </select>
         </label>
 
         <label>
-          Details (optional)
+          Details optional
           <textarea id="abuseDetailsPopup" rows="4" placeholder="Add details that help moderation…"></textarea>
         </label>
 
@@ -145,14 +170,14 @@
 
       <div class="contribBox">
         <div class="contribCard">
-          <h3>KES (M-Pesa)</h3>
+          <h3>KES M-Pesa</h3>
           <p><b>Till:</b> <span id="mpesaTillPopup">3062600</span></p>
           <button id="copyTillBtnPopup" type="button">Copy Till</button>
         </div>
 
         <div class="contribCard">
-          <h3>USD (Card/PayPal)</h3>
-          <input id="usdLinkPopup" type="text" placeholder="https://..." />
+          <h3>USD Card / PayPal</h3>
+          <input id="usdLinkPopup" type="text" placeholder="Paste USD payment link..." />
           <button id="openUsdBtnPopup" type="button">Open USD link</button>
         </div>
       </div>
@@ -162,5 +187,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="countries.js"></script>
   <script src="client.js"></script>
+
 </body>
 </html>
