@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Richiee Live Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body{margin:0;font-family:Arial;background:#0f172a;color:white}
+    header{padding:20px;background:#020617;display:flex;justify-content:space-between;align-items:center}
+    h1{margin:0;color:#facc15}
+    button{background:#facc15;border:0;padding:10px 14px;border-radius:10px;font-weight:bold;cursor:pointer}
+    .wrap{padding:20px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px}
+    .card{background:#1e293b;padding:20px;border-radius:18px}
+    .num{font-size:34px;font-weight:bold;color:#facc15}
+    textarea{width:100%;height:90px;border-radius:12px;padding:12px;background:#020617;color:white;border:1px solid #334155}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border-bottom:1px solid #334155;padding:10px;text-align:left;font-size:14px}
+    .section{margin-top:25px}
+    .muted{color:#94a3b8}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Richiee Live Admin</h1>
+  <button onclick="logout()">Logout</button>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <div class="card"><div class="muted">Online Users</div><div class="num" id="online">0</div></div>
+    <div class="card"><div class="muted">Waiting Users</div><div class="num" id="waiting">0</div></div>
+    <div class="card"><div class="muted">Active Pairs</div><div class="num" id="pairs">0</div></div>
+    <div class="card"><div class="muted">Countries</div><div class="num" id="countries">0</div></div>
+  </div>
+
+  <div class="section card">
+    <h2>Maintenance Notice</h2>
+    <textarea id="maintenance" placeholder="Write message to show users..."></textarea><br><br>
+    <button onclick="saveMaintenance()">Send Notice</button>
+  </div>
+
+  <div class="section card">
+    <h2>Live Users</h2>
+    <table>
+      <thead><tr><th>Socket ID</th><th>Country</th><th>Status</th><th>Preference</th><th>Connected</th></tr></thead>
+      <tbody id="users"></tbody>
+    </table>
+  </div>
+
+  <div class="section card">
+    <h2>Abuse Reports</h2>
+    <button onclick="clearReports()">Clear Reports</button>
+    <table>
+      <thead><tr><th>Time</th><th>Reason</th><th>From</th><th>Partner</th><th>Details</th></tr></thead>
+      <tbody id="reports"></tbody>
+    </table>
+  </div>
+
+  <div class="section card">
+    <h2>Support Tickets</h2>
+    <button onclick="clearTickets()">Clear Tickets</button>
+    <table>
+      <thead><tr><th>Time</th><th>Category</th><th>Country</th><th>Message</th></tr></thead>
+      <tbody id="tickets"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function loadAdmin(){
+  const res = await fetch("/api/admin/summary");
+  if(res.status === 401){
+    location.href = "/admin/login";
+    return;
+  }
+
+  const data = await res.json();
+
+  online.innerText = data.onlineUsers || 0;
+  waiting.innerText = data.waitingUsers || 0;
+  pairs.innerText = data.activePairs || 0;
+  countries.innerText = data.countriesConnected || 0;
+  maintenance.value = data.maintenanceNotice || "";
+
+  users.innerHTML = (data.users || []).map(u => `
+    <tr>
+      <td>${u.id}</td>
+      <td>${u.country}</td>
+      <td>${u.status}</td>
+      <td>${u.preference}</td>
+      <td>${u.connectedAt}</td>
+    </tr>
+  `).join("");
+
+  reports.innerHTML = (data.reports || []).map(r => `
+    <tr>
+      <td>${r.time}</td>
+      <td>${r.reason}</td>
+      <td>${r.fromCountry}</td>
+      <td>${r.partnerCountry}</td>
+      <td>${r.details}</td>
+    </tr>
+  `).join("");
+
+  tickets.innerHTML = (data.tickets || []).map(t => `
+    <tr>
+      <td>${t.time}</td>
+      <td>${t.category}</td>
+      <td>${t.fromCountry}</td>
+      <td>${t.message}</td>
+    </tr>
+  `).join("");
+}
+
+async function saveMaintenance(){
+  await fetch("/api/admin/maintenance", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ message: maintenance.value })
+  });
+  alert("Maintenance notice sent");
+  loadAdmin();
+}
+
+async function clearReports(){
+  await fetch("/api/admin/clear-reports", { method:"POST" });
+  loadAdmin();
+}
+
+async function clearTickets(){
+  await fetch("/api/admin/clear-tickets", { method:"POST" });
+  loadAdmin();
+}
+
+async function logout(){
+  await fetch("/api/admin/logout", { method:"POST" });
+  location.href = "/admin/login";
+}
+
+loadAdmin();
+setInterval(loadAdmin, 3000);
+</script>
+</body>
+</html>
