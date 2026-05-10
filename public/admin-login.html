@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Richiee Live Admin</title>
+
+  <style>
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      font-family:Arial, Helvetica, sans-serif;
+    }
+
+    body{
+      background:#0f172a;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      overflow:hidden;
+    }
+
+    .bg{
+      position:absolute;
+      width:500px;
+      height:500px;
+      background:linear-gradient(45deg,#facc15,#f59e0b);
+      filter:blur(120px);
+      opacity:.25;
+      border-radius:50%;
+    }
+
+    .bg.one{
+      top:-100px;
+      left:-100px;
+    }
+
+    .bg.two{
+      bottom:-100px;
+      right:-100px;
+    }
+
+    .login-box{
+      position:relative;
+      z-index:10;
+      width:400px;
+      background:rgba(15,23,42,.92);
+      border:1px solid rgba(255,255,255,.08);
+      backdrop-filter:blur(14px);
+      padding:40px;
+      border-radius:24px;
+      box-shadow:0 20px 60px rgba(0,0,0,.45);
+    }
+
+    .logo{
+      width:80px;
+      height:80px;
+      border-radius:20px;
+      background:linear-gradient(135deg,#facc15,#f59e0b);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:30px;
+      margin:auto;
+      margin-bottom:20px;
+      color:#000;
+      font-weight:bold;
+    }
+
+    h1{
+      text-align:center;
+      color:#fff;
+      margin-bottom:10px;
+    }
+
+    p{
+      text-align:center;
+      color:#94a3b8;
+      margin-bottom:30px;
+      font-size:14px;
+    }
+
+    .input-group{
+      margin-bottom:20px;
+    }
+
+    input{
+      width:100%;
+      padding:15px;
+      border:none;
+      outline:none;
+      border-radius:14px;
+      background:#1e293b;
+      color:#fff;
+      font-size:15px;
+    }
+
+    input::placeholder{
+      color:#64748b;
+    }
+
+    button{
+      width:100%;
+      padding:15px;
+      border:none;
+      border-radius:14px;
+      background:linear-gradient(135deg,#facc15,#f59e0b);
+      color:#000;
+      font-weight:bold;
+      font-size:16px;
+      cursor:pointer;
+      transition:.25s;
+    }
+
+    button:hover{
+      transform:translateY(-2px);
+    }
+
+    .status{
+      margin-top:18px;
+      text-align:center;
+      color:#ef4444;
+      font-size:14px;
+    }
+
+    .footer{
+      margin-top:25px;
+      text-align:center;
+      color:#64748b;
+      font-size:12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg one"></div>
+  <div class="bg two"></div>
+
+  <div class="login-box">
+
+    <div class="logo">
+      R
+    </div>
+
+    <h1>Richiee Live</h1>
+    <p>Admin Control Center</p>
+
+    <div class="input-group">
+      <input type="text" id="username" placeholder="Admin Username">
+    </div>
+
+    <div class="input-group">
+      <input type="password" id="password" placeholder="Admin Password">
+    </div>
+
+    <button onclick="login()">
+      Login to Dashboard
+    </button>
+
+    <div class="status" id="status"></div>
+
+    <div class="footer">
+      Richiee Live Worldwide Video Platform
+    </div>
+
+  </div>
+
+  <script>
+    async function login() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const status = document.getElementById("status");
+
+      status.innerText = "Authenticating...";
+
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username,
+            password
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+          status.style.color = "#22c55e";
+          status.innerText = "Login successful";
+
+          setTimeout(() => {
+            window.location.href = "/admin";
+          }, 700);
+
+        } else {
+          status.style.color = "#ef4444";
+          status.innerText = data.message || "Invalid credentials";
+        }
+
+      } catch (e) {
+        status.style.color = "#ef4444";
+        status.innerText = "Server error";
+      }
+    }
+  </script>
+
+</body>
+</html>

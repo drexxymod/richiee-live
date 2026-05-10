@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const path = require("path");
+const crypto = require("crypto");
 const { Server } = require("socket.io");
 
 const app = express();
@@ -10,6 +11,8 @@ const PORT = process.env.PORT || 3000;
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "richiee_goat";
+const ADMIN_SESSION_SECRET =
+  process.env.ADMIN_SESSION_SECRET || "change_this_secret_in_railway";
 
 const ALLOWED_ORIGINS = [
   "https://www.richieelive.space",
@@ -43,30 +46,46 @@ let maintenanceNotice = "";
 const socketMeta = {};
 const rateLimitMap = new Map();
 
+/* ---------------- SESSION HELPERS ---------------- */
+
+function createSessionToken() {
+  const raw = `${ADMIN_USERNAME}:${Date.now()}:${ADMIN_SESSION_SECRET}`;
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((cookie) => cookie.trim().split("="))
+      .filter((parts) => parts.length === 2)
+  );
+}
+
+let activeAdminToken = null;
+
+function requireAdminSession(req, res, next) {
+  const cookies = parseCookies(req);
+
+  if (cookies.richiee_admin_session && cookies.richiee_admin_session === activeAdminToken) {
+    return next();
+  }
+
+  if (req.path.startsWith("/api/")) {
+    return res.status(401).json({
+      ok: false,
+      message: "Unauthorized"
+    });
+  }
+
+  return res.redirect("/admin/login");
+}
+
 /* ---------------- HELPERS ---------------- */
 
 function nowISO() {
   return new Date().toISOString();
-}
-
-function requireAdminAuth(req, res, next) {
-  const auth = req.headers.authorization;
-
-  if (!auth || !auth.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="Richiee Admin"');
-    return res.status(401).send("Authentication required.");
-  }
-
-  const base64 = auth.split(" ")[1];
-  const decoded = Buffer.from(base64, "base64").toString("utf8");
-  const [username, password] = decoded.split(":");
-
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    return next();
-  }
-
-  res.setHeader("WWW-Authenticate", 'Basic realm="Richiee Admin"');
-  return res.status(401).send("Invalid credentials.");
 }
 
 function removeFromQueue(socketId) {
@@ -155,11 +174,50 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.get("/admin", requireAdminAuth, (req, res) => {
+app.get("/admin/login", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin-login.html"));
+});
+
+app.post("/api/admin/login", (req, res) => {
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "").trim();
+
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({
+      ok: false,
+      message: "Invalid username or password"
+    });
+  }
+
+  activeAdminToken = createSessionToken();
+
+  res.setHeader(
+    "Set-Cookie",
+    `richiee_admin_session=${activeAdminToken}; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax`
+  );
+
+  return res.json({
+    ok: true,
+    message: "Logged in"
+  });
+});
+
+app.post("/api/admin/logout", (req, res) => {
+  activeAdminToken = null;
+
+  res.setHeader(
+    "Set-Cookie",
+    "richiee_admin_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax"
+  );
+
+  res.json({ ok: true });
+});
+
+app.get("/admin", requireAdminSession, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
-app.get("/api/admin/summary", requireAdminAuth, (req, res) => {
+app.get("/api/admin/summary", requireAdminSession, (req, res) => {
   res.json({
     onlineUsers: io.of("/").sockets.size,
     waitingUsers: waitingUsers.length,
@@ -172,7 +230,7 @@ app.get("/api/admin/summary", requireAdminAuth, (req, res) => {
   });
 });
 
-app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
+app.post("/api/admin/maintenance", requireAdminSession, (req, res) => {
   maintenanceNotice = String(req.body?.message || "").slice(0, 1000);
 
   io.emit("maintenance", {
@@ -185,12 +243,12 @@ app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
   });
 });
 
-app.post("/api/admin/clear-tickets", requireAdminAuth, (req, res) => {
+app.post("/api/admin/clear-tickets", requireAdminSession, (req, res) => {
   supportTickets = [];
   res.json({ ok: true });
 });
 
-app.post("/api/admin/clear-reports", requireAdminAuth, (req, res) => {
+app.post("/api/admin/clear-reports", requireAdminSession, (req, res) => {
   abuseReports = [];
   res.json({ ok: true });
 });
