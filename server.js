@@ -5,17 +5,49 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
-
-app.use(express.json());
-app.use(express.static("public"));
 
 const PORT = process.env.PORT || 3000;
 
-/* ---------------- ADMIN LOGIN ---------------- */
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "richiee_goat";
 
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "richiee_goat";
+const ALLOWED_ORIGINS = [
+  "https://www.richieelive.space",
+  "https://richieelive.space",
+  "https://richiee-live-production.up.railway.app",
+  "http://localhost:3000"
+];
+
+const io = new Server(server, {
+  cors: {
+    origin: ALLOWED_ORIGINS,
+    methods: ["GET", "POST"]
+  },
+  pingTimeout: 30000,
+  pingInterval: 25000
+});
+
+app.use(express.json({ limit: "200kb" }));
+app.use(express.static("public"));
+
+/* ---------------- MEMORY STATE ---------------- */
+
+let waitingUsers = [];
+let partners = {};
+let countries = {};
+let matchPreferences = {};
+let supportTickets = [];
+let abuseReports = [];
+let maintenanceNotice = "";
+
+const socketMeta = {};
+const rateLimitMap = new Map();
+
+/* ---------------- HELPERS ---------------- */
+
+function nowISO() {
+  return new Date().toISOString();
+}
 
 function requireAdminAuth(req, res, next) {
   const auth = req.headers.authorization;
@@ -37,45 +69,31 @@ function requireAdminAuth(req, res, next) {
   return res.status(401).send("Invalid credentials.");
 }
 
-/* ---------------- USERS ---------------- */
-
-let waitingUsers = [];
-let partners = {};
-let countries = {};
-let matchPreferences = {};
-
-/* ---------------- SUPPORT / REPORT / MAINTENANCE ---------------- */
-
-let supportTickets = [];
-let abuseReports = [];
-let maintenanceNotice = "";
-
-/* ---------------- HELPERS ---------------- */
-
 function removeFromQueue(socketId) {
   waitingUsers = waitingUsers.filter((id) => id !== socketId);
 }
 
 function safeEmit(to, event, payload) {
-  io.to(to).emit(event, payload);
+  const target = io.sockets.sockets.get(to);
+  if (target) {
+    io.to(to).emit(event, payload);
+  }
 }
 
 function broadcastOnlineCount() {
-  const count = io.of("/").sockets.size;
-  io.emit("online-count", { count });
-}
-
-function getWaitingCount() {
-  return waitingUsers.length;
+  io.emit("online-count", {
+    count: io.of("/").sockets.size,
+    waiting: waitingUsers.length,
+    activePairs: Math.floor(Object.keys(partners).length / 2)
+  });
 }
 
 function getConnectedCountriesCount() {
-  const uniqueCountries = new Set(
+  return new Set(
     Object.values(countries).filter(
       (country) => country && country !== "??" && country !== "--"
     )
-  );
-  return uniqueCountries.size;
+  ).size;
 }
 
 function canMatch(socketIdA, socketIdB) {
@@ -91,7 +109,51 @@ function canMatch(socketIdA, socketIdB) {
   return aAcceptsB && bAcceptsA;
 }
 
-/* ---------------- ADMIN ROUTES ---------------- */
+function isRateLimited(socketId, action, limitMs) {
+  const key = `${socketId}:${action}`;
+  const last = rateLimitMap.get(key) || 0;
+  const current = Date.now();
+
+  if (current - last < limitMs) {
+    return true;
+  }
+
+  rateLimitMap.set(key, current);
+  return false;
+}
+
+function cleanupSocket(socketId) {
+  const partner = partners[socketId];
+
+  if (partner) {
+    safeEmit(partner, "partner-left");
+    delete partners[partner];
+  }
+
+  delete partners[socketId];
+  delete countries[socketId];
+  delete matchPreferences[socketId];
+  delete socketMeta[socketId];
+
+  removeFromQueue(socketId);
+
+  for (const key of rateLimitMap.keys()) {
+    if (key.startsWith(`${socketId}:`)) {
+      rateLimitMap.delete(key);
+    }
+  }
+}
+
+/* ---------------- ROUTES ---------------- */
+
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "richiee-live",
+    uptime: process.uptime(),
+    time: nowISO()
+  });
+});
 
 app.get("/admin", requireAdminAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
@@ -100,19 +162,22 @@ app.get("/admin", requireAdminAuth, (req, res) => {
 app.get("/api/admin/summary", requireAdminAuth, (req, res) => {
   res.json({
     onlineUsers: io.of("/").sockets.size,
-    waitingUsers: getWaitingCount(),
+    waitingUsers: waitingUsers.length,
+    activePairs: Math.floor(Object.keys(partners).length / 2),
     countriesConnected: getConnectedCountriesCount(),
     maintenanceNotice,
     tickets: supportTickets,
-    reports: abuseReports
+    reports: abuseReports,
+    users: Object.values(socketMeta)
   });
 });
 
 app.post("/api/admin/maintenance", requireAdminAuth, (req, res) => {
-  const message = String(req.body?.message || "").slice(0, 1000);
-  maintenanceNotice = message;
+  maintenanceNotice = String(req.body?.message || "").slice(0, 1000);
 
-  io.emit("maintenance", { message: maintenanceNotice });
+  io.emit("maintenance", {
+    message: maintenanceNotice
+  });
 
   res.json({
     ok: true,
@@ -130,24 +195,12 @@ app.post("/api/admin/clear-reports", requireAdminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-/* ---------------- MATCH USERS ---------------- */
+/* ---------------- MATCHING ---------------- */
 
 function matchUsers(socket) {
   removeFromQueue(socket.id);
 
-  if (waitingUsers.length === 0) {
-    waitingUsers.push(socket.id);
-
-    const pref = matchPreferences[socket.id] || "ANY";
-    socket.emit("status", {
-      message:
-        pref === "ANY"
-          ? "Waiting for new partner..."
-          : `Waiting for new partner from ${pref}...`
-    });
-
-    return;
-  }
+  if (partners[socket.id]) return;
 
   let partnerId = null;
 
@@ -157,6 +210,7 @@ function matchUsers(socket) {
     if (
       candidate !== socket.id &&
       io.sockets.sockets.get(candidate) &&
+      !partners[candidate] &&
       canMatch(socket.id, candidate)
     ) {
       partnerId = candidate;
@@ -166,9 +220,12 @@ function matchUsers(socket) {
   }
 
   if (!partnerId) {
-    waitingUsers.push(socket.id);
+    if (!waitingUsers.includes(socket.id)) {
+      waitingUsers.push(socket.id);
+    }
 
     const pref = matchPreferences[socket.id] || "ANY";
+
     socket.emit("status", {
       message:
         pref === "ANY"
@@ -176,11 +233,15 @@ function matchUsers(socket) {
           : `Waiting for new partner from ${pref}...`
     });
 
+    broadcastOnlineCount();
     return;
   }
 
   partners[socket.id] = partnerId;
   partners[partnerId] = socket.id;
+
+  if (socketMeta[socket.id]) socketMeta[socket.id].status = "IN_CALL";
+  if (socketMeta[partnerId]) socketMeta[partnerId].status = "IN_CALL";
 
   socket.emit("matched", { role: "caller" });
   safeEmit(partnerId, "matched", { role: "callee" });
@@ -202,14 +263,25 @@ function matchUsers(socket) {
     socket.emit("maintenance", { message: maintenanceNotice });
     safeEmit(partnerId, "maintenance", { message: maintenanceNotice });
   }
+
+  broadcastOnlineCount();
 }
 
-/* ---------------- SOCKET CONNECTION ---------------- */
+/* ---------------- SOCKETS ---------------- */
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
   matchPreferences[socket.id] = "ANY";
+
+  socketMeta[socket.id] = {
+    id: socket.id,
+    connectedAt: nowISO(),
+    country: "??",
+    preference: "ANY",
+    status: "CONNECTED"
+  };
+
   broadcastOnlineCount();
 
   socket.emit("status", {
@@ -217,19 +289,39 @@ io.on("connection", (socket) => {
   });
 
   socket.emit("online-count", {
-    count: io.of("/").sockets.size
+    count: io.of("/").sockets.size,
+    waiting: waitingUsers.length,
+    activePairs: Math.floor(Object.keys(partners).length / 2)
   });
 
+  if (maintenanceNotice) {
+    socket.emit("maintenance", {
+      message: maintenanceNotice
+    });
+  }
+
   socket.on("client-geo", ({ country }) => {
-    countries[socket.id] = country || "??";
+    const cleanCountry = String(country || "??").slice(0, 80);
+
+    countries[socket.id] = cleanCountry;
+
+    if (socketMeta[socket.id]) {
+      socketMeta[socket.id].country = cleanCountry;
+    }
 
     socket.emit("you-geo", {
-      you: countries[socket.id]
+      you: cleanCountry
     });
   });
 
   socket.on("set-country-filter", ({ country }) => {
-    matchPreferences[socket.id] = country || "ANY";
+    const cleanCountry = String(country || "ANY").slice(0, 80);
+
+    matchPreferences[socket.id] = cleanCountry;
+
+    if (socketMeta[socket.id]) {
+      socketMeta[socket.id].preference = cleanCountry;
+    }
 
     if (waitingUsers.includes(socket.id)) {
       removeFromQueue(socket.id);
@@ -237,25 +329,37 @@ io.on("connection", (socket) => {
 
       socket.emit("status", {
         message:
-          matchPreferences[socket.id] === "ANY"
+          cleanCountry === "ANY"
             ? "Waiting for new partner..."
-            : `Waiting for new partner from ${matchPreferences[socket.id]}...`
+            : `Waiting for new partner from ${cleanCountry}...`
       });
     }
   });
 
   socket.on("start", () => {
+    if (isRateLimited(socket.id, "start", 800)) return;
     if (partners[socket.id]) return;
+
+    if (socketMeta[socket.id]) {
+      socketMeta[socket.id].status = "WAITING";
+    }
+
     matchUsers(socket);
   });
 
   socket.on("next", () => {
+    if (isRateLimited(socket.id, "next", 1000)) return;
+
     const partner = partners[socket.id];
 
     if (partner) {
       safeEmit(partner, "partner-left");
+
       delete partners[partner];
       delete partners[socket.id];
+
+      if (socketMeta[partner]) socketMeta[partner].status = "CONNECTED";
+      if (socketMeta[socket.id]) socketMeta[socket.id].status = "WAITING";
     }
 
     matchUsers(socket);
@@ -266,13 +370,21 @@ io.on("connection", (socket) => {
 
     if (partner) {
       safeEmit(partner, "partner-left");
+
       delete partners[partner];
       delete partners[socket.id];
+
+      if (socketMeta[partner]) socketMeta[partner].status = "CONNECTED";
     } else {
       removeFromQueue(socket.id);
     }
 
+    if (socketMeta[socket.id]) {
+      socketMeta[socket.id].status = "STOPPED";
+    }
+
     socket.emit("stopped");
+    broadcastOnlineCount();
   });
 
   socket.on("signal", ({ type, data }) => {
@@ -283,78 +395,77 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chat", ({ text }) => {
+    if (isRateLimited(socket.id, "chat", 300)) return;
+
     const partner = partners[socket.id];
     if (!partner) return;
 
+    const cleanText = String(text || "").slice(0, 500).trim();
+    if (!cleanText) return;
+
     safeEmit(partner, "chat", {
       from: "partner",
-      text
+      text: cleanText
     });
 
     socket.emit("chat", {
       from: "you",
-      text
+      text: cleanText
     });
   });
 
   socket.on("support-ticket", (ticket) => {
+    if (isRateLimited(socket.id, "support-ticket", 5000)) return;
+
     const cleanTicket = {
       id: `ticket_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
-      time: ticket?.time || new Date().toLocaleString(),
-      category: ticket?.category || "General",
+      socketId: socket.id,
+      time: ticket?.time || nowISO(),
+      category: String(ticket?.category || "General").slice(0, 80),
       message: String(ticket?.message || "").slice(0, 1000),
-      fromCountry: ticket?.fromCountry || "??"
+      fromCountry: String(ticket?.fromCountry || countries[socket.id] || "??").slice(0, 80)
     };
 
     supportTickets.unshift(cleanTicket);
+    supportTickets = supportTickets.slice(0, 100);
+
     console.log("Support ticket received:", cleanTicket);
   });
 
   socket.on("abuse-report", (report) => {
+    if (isRateLimited(socket.id, "abuse-report", 5000)) return;
+
+    const partner = partners[socket.id];
+
     const cleanReport = {
       id: `report_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
-      time: report?.time || new Date().toLocaleString(),
-      reason: report?.reason || "Other",
+      reporterSocketId: socket.id,
+      reportedSocketId: partner || null,
+      time: report?.time || nowISO(),
+      reason: String(report?.reason || "Other").slice(0, 100),
       details: String(report?.details || "").slice(0, 1000),
-      fromCountry: report?.fromCountry || "??",
-      partnerCountry: report?.partnerCountry || "??"
+      fromCountry: String(report?.fromCountry || countries[socket.id] || "??").slice(0, 80),
+      partnerCountry: String(
+        report?.partnerCountry || (partner ? countries[partner] : "??") || "??"
+      ).slice(0, 80)
     };
 
     abuseReports.unshift(cleanReport);
+    abuseReports = abuseReports.slice(0, 100);
+
     console.log("Abuse report received:", cleanReport);
-  });
-
-  socket.on("maintenance", ({ message }) => {
-    maintenanceNotice = String(message || "").slice(0, 1000);
-
-    io.emit("maintenance", {
-      message: maintenanceNotice
-    });
-
-    console.log("Maintenance updated:", maintenanceNotice);
   });
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
 
-    const partner = partners[socket.id];
-
-    if (partner) {
-      safeEmit(partner, "partner-left");
-      delete partners[partner];
-    }
-
-    delete partners[socket.id];
-    delete countries[socket.id];
-    delete matchPreferences[socket.id];
-
-    removeFromQueue(socket.id);
+    cleanupSocket(socket.id);
     broadcastOnlineCount();
   });
 });
 
-/* ---------------- START SERVER ---------------- */
+/* ---------------- START ---------------- */
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
